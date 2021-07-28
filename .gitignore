@@ -1,0 +1,7 @@
+.DS_Store
+.RData
+.Rhistory
+senstivity_test/*/tmp/
+~$*
+.Rproj.user
+formulation-vs-active-ingredient-project/related-but-secondary/
