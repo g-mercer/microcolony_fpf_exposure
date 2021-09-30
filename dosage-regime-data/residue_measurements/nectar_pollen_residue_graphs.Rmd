@@ -10,9 +10,9 @@ knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 ```
 
 ```{r}
-pollen <- read.csv(file = "pollen_residues_ugkg.csv")
+pollen <- read.csv(file = "./input/pollen_residues_ugkg.csv")
 
-nectar <- read.csv(file = "nectar_residues_ugkg.csv")
+nectar <- read.csv(file = "./input/nectar_residues_ugkg.csv")
 
 # add matrix factor
 pollen$matrix <- "pollen"
@@ -102,9 +102,9 @@ median(nectar [nectar$DALA_h > 1,] $residue_measurement_ugkg)
 Save plots
 
 ```{r}
-pollen_day_1_plot <- plot_function(pollen_day_1, "firebrick4", theme(axis.title.x = element_blank()))
+pollen_day_1_plot <- plot_function(pollen_day_1, "#1AFF1A", theme(axis.title.x = element_blank()))
 
-nectar_day_1_plot <- plot_function(nectar_day_1, "steelblue", theme())
+nectar_day_1_plot <- plot_function(nectar_day_1, "#4B0092", theme())
 ```
 
 Create new function that plots median as well.
@@ -142,9 +142,9 @@ plot_function_1 <- function(x, y, z) {
   
 }
 
-pollen_day_3_plot_median <- plot_function_1(pollen_day_3, "firebrick4", theme(axis.title.x = element_blank()))
+pollen_day_3_plot_median <- plot_function_1(pollen_day_3, "#1AFF1A", theme(axis.title.x = element_blank()))
 
-nectar_day_2_plot_median <- plot_function_1(nectar_day_2, "steelblue", theme() )
+nectar_day_2_plot_median <- plot_function_1(nectar_day_2, "#4B0092", theme() )
 ```
 
 ```{r}
@@ -173,7 +173,7 @@ combined_plots <- plot_grid(
   rel_heights = c(0.1, 1)
 )
 
- pdf(file = "/Users/guy/Documents/phd/RHUL/formulation-vs-active-ingredient-project/dosage-regime-data/combined_plots.pdf",   # The directory you want to save the file in
+ pdf(file = "./combined_plots.pdf",   # The directory you want to save the file in
      width = 6, # The width of the plot in inches
      height = 4) # The height of the plot in inches
 

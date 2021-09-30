@@ -1,0 +1,216 @@
+---
+title: "Literature Search Table"
+author: "Guy Mercer"
+date: "23/08/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE}
+lit_search_table <- read.csv(file = "./study_pure_or_formulation.csv", header = TRUE)
+
+colnames(lit_search_table) <- c("Insecticide", "Search Term", "Search Type", "Database", "Studies Using Formulation (All)", "Studies Using Formulation (Artificial Exposure)")
+
+database_overview_table <- read.csv(file = "./database_overview_table.csv")
+
+colnames(database_overview_table) <- c("Insecticide", "Formulation", "Countries Approved in for Bee Attractive Crop Application (24)", "Countries Approved in for Bee Attractive Crop Application Without Clear Restrictions (24)", "Countries Approved in for Bee Attractive Crop Application Without Adequate Restrictions (24)", "Bee Attractive Crop Applications Approved", "Bee Attractive Crop Applications Approved Without Clear Restrictions", "Bee Attractive Crop Applications Approved Without Adequate Restrictions")
+```
+
+How to use flextable resources:
+
+[Book](https://ardata-fr.github.io/flextable-book/)
+[Function Reference](https://davidgohel.github.io/flextable/reference/index.html)
+
+and a reference on colour choices in R:
+
+[R Colours](https://www.datanovia.com/en/blog/awesome-list-of-657-r-color-names/)
+
+Literature Search Table First 
+
+```{r, echo=FALSE}
+library(flextable)
+library(scales)
+library(webshot)
+
+table <- flextable(head(lit_search_table))
+
+table <- add_header_row(table, values = c("Insecticide Literature Searches"), colwidths = c(6))
+
+table <- fontsize(table, i = 1, j = NULL, size = 18, part = "header")
+
+table <- bold(table, i = 1, j = NULL, bold = TRUE, part = "header")
+
+table <- fontsize(table, i = c(1,2), j = 1, size = 12, part = "body")
+
+table <- fontsize(table, i = c(1,2), j = 2, size = 8, part = "body")
+
+table <- bold(table, i = c(1,2), j = c(5,6), bold = TRUE, part = "body")
+
+table <- align(table, i = 1, j = NULL, align = "center", part = "header")
+
+table <- hrule(table, i = 1, rule = "exact", part = "header")
+
+table <- height(table, i = 1, 0.6, part = "header")
+
+table <- width(table, j = 2, 3)
+
+table <- width(table, j = 5, 2)
+
+table <- width(table, j = 6, 2.5)
+
+table <- font(
+  table,
+  i = NULL,
+  j = NULL,
+  "calibri",
+  part = "all",
+)
+
+# background colour
+
+# use scales package to set transparency
+colour <- alpha("#999999", alpha = 0.1)
+
+colour_1 <- alpha("#E1BE6A", alpha = 0.4)
+
+colour_2 <- alpha("#40B0A6", alpha = 0.4)
+
+
+table <- bg(table, i = NULL, j = NULL, bg = colour, part = "body")
+
+table <- bg(table, i = 2, j = NULL, bg = colour, part = "header")
+
+table <- bg(table, i = 1, j = NULL, bg = colour_1, part = "body")
+
+table <- bg(table, i = 2, j = NULL, bg = colour_2, part = "body")
+
+table <- hline(table, i = 1, j = c(2:6), border = NULL, part = "body")
+
+table
+
+save_as_image(table, path = "./literature_search_table.png")
+```
+
+Database Table Second
+
+```{r, echo=FALSE}
+table_1 <- flextable(head(database_overview_table))
+
+table_1 <- add_header_row(table_1, values = c("EU Database Search Overview"), colwidths = c(8))
+
+table_1 <- fontsize(table_1, i = 1, j = NULL, size = 18, part = "header")
+
+table_1 <- fontsize(table_1, i = 2, j = NULL, size = 8, part = "header")
+
+table_1 <- fontsize(table_1, i = 2, j = c(1,2), size = 10, part = "header")
+
+table_1 <- fontsize(table_1, i = NULL, j = 2, size = 10, part = "body")
+
+table_1 <- bold(table_1, i = 1, j = NULL, bold = TRUE, part = "header")
+
+table_1 <- fontsize(table_1, i = c(1,5), j = 1, size = 12, part = "body")
+
+# table_1 <- fontsize(table_1, i = c(1,2), j = 2, size = 8, part = "body")
+
+table_1 <- bold(table_1, i = NULL, j = c(5,8), bold = TRUE, part = "body")
+
+table_1 <- align(table_1, i = 1, j = NULL, align = "center", part = "header")
+
+table_1 <- hrule(table_1, i = 1, rule = "exact", part = "header")
+
+table_1 <- height(table_1, i = 1, 0.6, part = "header")
+
+table_1 <- width(table_1, j = c(2:8), 3)
+
+table_1 <- font(
+  table_1,
+  i = NULL,
+  j = NULL,
+  "calibri",
+  part = "all",
+)
+
+# background colour
+
+# use scales package to set transparency
+
+colour <- alpha("#999999", alpha = 0.1)
+
+colour_1 <- alpha("#E1BE6A", alpha = 0.7)
+
+colour_2 <- alpha("#E1BE6A", alpha = 0.4)
+
+colour_3 <- alpha("#40B0A6", alpha = 0.4)
+
+table_1 <- bg(table_1, i = NULL, j = NULL, bg = colour, part = "body")
+
+table_1 <- bg(table_1, i = 2, j = NULL, bg = colour, part = "header")
+
+table_1 <- bg(table_1, i = c(1:4), j = NULL, bg = colour_2, part = "body")
+
+table_1 <- bg(table_1, i = 5, j = NULL, bg = colour_3, part = "body")
+
+#table_1 <- bg(table_1, i = NULL, j = c(5,8), bg = colour_1, part = "body")
+
+#table_1 <- bg(table_1, i = 2, j = c(5,8), bg = colour_1, part = "header")
+
+table_1 <- hline(table_1, i = 4, j = c(2:8), border = NULL, part = "body")
+
+table_1 <- bold(table_1, i = 2, j = c(5,8), bold = TRUE, part = "header")
+
+table_1 <- highlight(table_1, i = 1, j = c(5,8), color = colour_1, part = "body")
+
+table_1
+
+save_as_image(table_1, path = "./database_overview_table.png")
+
+```
+
+Degradation Model Output Error Levels Third
+
+```{r}
+# input
+degradation_error_levels <- read.csv("./degradation_model_error_levels.csv", header = TRUE)
+
+colnames(degradation_error_levels) <- c("Model","SFO χ2 Error Level (%)", "FOMC χ2 Error Level (%)","DFOP χ2 Error Level  (%)")
+
+#flextable
+
+colour <- alpha("#999999", alpha = 0.1)
+
+nectar_colour <- alpha("#E66100", alpha = 0.4)
+
+pollen_colour <- alpha("#1A85FF", alpha = 0.4)
+
+table_2 <- flextable(head(degradation_error_levels))
+
+table_2 <- bold(table_2, i = NULL, j = 2, bold = TRUE, part = "body")
+
+table_2 <- add_header_row(table_2, values = c("Minimum Percentage Error Required In The Data For The χ2 Test To Be Passed"), colwidths = c(4))
+
+table_2 <- bold(table_2, i = 1, j = NULL, bold = TRUE, part = "header")
+
+table_2 <- align(table_2, i = 1, j = NULL, align = "center", part = "header")
+
+table_2 <- hrule(table_2, i = 1, rule = "exact", part = "header")
+
+table_2 <- height(table_2, i = 1, 0.6, part = "header")
+
+table_2 <- fontsize(table_2, i = 1, j = NULL, size = 14, part = "header")
+
+table_2 <- bg(table_2, i = 2, j = NULL, bg = colour, part = "header")
+
+table_2 <- bg(table_2, i = c(1,2), j = NULL, bg = nectar_colour, part = "body")
+
+table_2 <- bg(table_2, i = c(3,4), j = NULL, bg = pollen_colour, part = "body")
+
+table_2 <- hline(table_2, i = 2, j = c(2:4), border = NULL, part = "body")
+
+table_2
+
+save_as_image(table_2, path = "./degradation_model_error_levels.png")
+```
+

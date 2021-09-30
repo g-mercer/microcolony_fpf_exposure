@@ -14,9 +14,9 @@ library("mkin", quietly = TRUE)
 library(tidyverse)
 
 # import data
-nectar <- read.csv(file = "/Users/guy/Dropbox/Mac/Documents/phd/RHUL/formulation-vs-active-ingredient-project/dosage-regime-data/residue_measurements/nectar_residues_ugkg.csv")
+nectar <- read.csv(file = "./input/nectar_residues_ugkg.csv")
 
-pollen <- read.csv(file = "/Users/guy/Dropbox/Mac/Documents/phd/RHUL/formulation-vs-active-ingredient-project/dosage-regime-data/residue_measurements/pollen_residues_ugkg.csv")
+pollen <- read.csv(file = "./input/pollen_residues_ugkg.csv")
 
 # keep only data post second application (t=0)
 nectar_day_1 <- nectar [nectar$DALA_h > 0,] 
@@ -43,6 +43,7 @@ plot(nectar_models)
 nectar_models_SFO <- mmkin("SFO", cores = 1,
                list("nectar" = nectar_model_data), quiet = TRUE)
 
+
 plot(nectar_models_SFO)
 
 summary(nectar_models [["SFO", 1]])
@@ -54,10 +55,24 @@ pollen_models <- mmkin(c("SFO", "FOMC", "DFOP"), cores = 1,
 plot(pollen_models)
 
 # summary(pollen_models [["SFO", 1]])
-
 ```
 
 Clearly none of the models fit nectar very well. For pollen can't even fit a model. Try with only datapoints past 24h. 
+
+```{r}
+test <- mkinfit("FOMC", nectar_model_data, quiet = TRUE)
+
+summary(test)
+
+plot(test, show_errmin = TRUE, show_residuals = TRUE, main = "test")
+
+test1 <- mkinfit("DFOP", nectar_model_data, quiet = TRUE)
+
+summary(test1)
+
+plot(test1, show_errmin = TRUE, show_residuals = TRUE, main = "test")
+```
+
 
 ```{r}
 # for nectar 
@@ -97,6 +112,14 @@ pollen_models_24 <- mmkin(c("SFO", "FOMC", "DFOP"), cores = 1,
 
 plot(pollen_models_24)
 
+# below was to check if the output was the same for pollen_model_24 on the ggplot markdown. It is. It seems that there is an override function
+# built into mkin where if a model completely fails the output is a horizontal line even if the model parameters actually result in a slight curve.
+pollen_model_24 <- mkinfit("SFO", pollen_model_data_24, quiet = TRUE)
+
+plot(pollen_model_24)
+
+parms(pollen_model_24) 
+
 # summary(pollen_models_24 [["DFOP", 1]])
 ```
 
@@ -117,3 +140,5 @@ Refs:
 [FOCUS Report](https://esdac.jrc.ec.europa.eu/public_path/projects_data/focus/dk/docs/finalreportFOCDegKinetics.pdf)
 
 [mkin Examples](https://pkgdown.jrwb.de/mkin/articles/FOCUS_L.html#laboratory-data-l3-1)
+
+
