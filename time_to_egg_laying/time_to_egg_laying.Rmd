@@ -1,0 +1,77 @@
+---
+title: "time_to_egg_laying"
+author: "Guy Mercer"
+date: "04/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+# import csv
+egg_laying_df <- read_csv("input/egg-laying-data.csv", col_names = TRUE)
+
+egg_laying_df <- as.data.frame(egg_laying_df)
+
+colnames(egg_laying_df) <- c("microcolony_number", "batch","colony_derived_from", "treatment", "egg_laying_day", 
+                             "day_egg_laying_post_exposure")
+
+# set variables as factors with appropriate reference levels
+egg_laying_df$treatment <- as.factor(egg_laying_df$treatment)
+egg_laying_df$treatment <- relevel(egg_laying_df$treatment, "control")
+
+egg_laying_df$batch <- as.factor(egg_laying_df$batch)
+egg_laying_df$batch <- relevel(egg_laying_df$batch, "1")
+
+egg_laying_df$colony_derived_from <- as.factor(egg_laying_df$colony_derived_from)
+egg_laying_df$colony_derived_from <- relevel(egg_laying_df$colony_derived_from, "1")
+
+# mean of each level in treatment factor
+means <- tibble()
+
+for (i in 1:length(levels(egg_laying_df$treatment))) {
+  
+  treatment_level_mean <- mean(egg_laying_df$day_egg_laying_post_exposure [egg_laying_df$treatment == levels(egg_laying_df$treatment) 
+                                                                           [i]])
+  means [i,1] <- levels(egg_laying_df$treatment) [i]
+  
+  means [i,2] <- treatment_level_mean
+  
+}
+
+colnames(means) <- c("Treatment", "Day Of Egg Laying Past Exposure")
+
+# Calculate SEs
+for (i in 1:length(levels(egg_laying_df$treatment))) {
+  
+  treatment_level_se <- sd(egg_laying_df$day_egg_laying_post_exposure [egg_laying_df$treatment == levels(egg_laying_df$treatment) [i]]) / 
+                        sqrt(length(egg_laying_df$day_egg_laying_post_exposure [egg_laying_df$treatment == 
+                                                                                levels(egg_laying_df$treatment) [i]]))
+  
+  t1 <- qt(0.975, df = length(egg_laying_df$day_egg_laying_post_exposure [egg_laying_df$treatment == levels(egg_laying_df$treatment) 
+                                                                          [i]]) -1)
+  
+  ci <- treatment_level_se * t1
+  
+  lowerCI <- as.numeric(means [means$Treatment == levels(egg_laying_df$treatment) [i], 2] - ci)
+  
+  means [means$Treatment == levels(egg_laying_df$treatment) [i], 3] <- lowerCI
+  
+  upperCI <- as.numeric(means [means$Treatment == levels(egg_laying_df$treatment) [i], 2] + ci)
+  
+  means [means$Treatment == levels(egg_laying_df$treatment) [i], 4] <- upperCI
+  
+}
+
+colnames(means) <- c("Treatment", "Day Of Egg Laying Past Exposure", "LowerCI", "UpperCI")
+
+means
+
+```
+Remember to exclude 0 values as egg laying began before treatment. 

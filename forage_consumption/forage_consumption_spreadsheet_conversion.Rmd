@@ -1,0 +1,83 @@
+---
+title: "forage_consumption_spreadsheet_conversion"
+author: "Guy Mercer"
+date: "09/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+library(tidyverse)
+
+# import
+forage_consumption_raw <- read.csv("input/forage_consumption.csv")
+
+# take only values for first correction
+for_con_test <- forage_consumption_raw [, 1:9]
+
+# create uncorrected column by in - out. If out value is 0 put NA in uncorrected column
+for_con_test$uncorrected_pollen_con_day_1 <- 0
+
+for (i in 1:nrow(for_con_test)) {
+  
+  if (for_con_test$pollen.out.day.2 [i] > 0) {
+  
+  for_con_test$uncorrected_pollen_con_day_1 [i] <- for_con_test$pollen.in.day.1 [i] - for_con_test$pollen.out.day.2 [i]
+
+  } else {
+  
+  for_con_test$uncorrected_pollen_con_day_1 [i] <- 0
+
+  }
+  
+}
+
+# correct using evap control average within batch. If evap control = 0 remove and only use remaining values to calculate mean. 
+corrected_average <- tibble()
+
+for (i in 1:length(unique(for_con_test$batch))) {
+
+  by_batch <- for_con_test [for_con_test$batch == i,]
+
+  by_batch$corrected_pollen_con_day_1_average <- 0
+  
+  filtered_ec_values <- c()
+
+  for (i in 1:length(by_batch$uncorrected_pollen_con_day_1 [grep(pattern = "EC", x = by_batch$microcolony.number)])) {
+  
+    if (by_batch$uncorrected_pollen_con_day_1 [grep(pattern = "EC", x = by_batch$microcolony.number)] [i] > 0) {
+    
+      filtered_ec_values <- c(filtered_ec_values, by_batch$uncorrected_pollen_con_day_1 [grep(pattern = "EC", x = by_batch$microcolony.number)] [i])
+    
+    }
+  
+  }
+  
+    for (i in 1:nrow(by_batch)) {
+  
+      if (by_batch$uncorrected_pollen_con_day_1 [i] != 0) {
+  
+      by_batch$corrected_pollen_con_day_1_average [i] <- by_batch$uncorrected_pollen_con_day_1 [i] -
+                                                         mean(filtered_ec_values)
+
+      } else {
+  
+     by_batch$corrected_pollen_con_day_1_average [i] <- 0
+
+    }
+    
+  }
+
+corrected_average <- rbind(corrected_average, by_batch)
+
+}
+
+# expand this to the complete dataframe
+# modify for sucrose
+# convert data into correct format with day as a variable (more rows less columns )
+# write a script to correct using the evap control closest to the microcolony in question. 
+
+```

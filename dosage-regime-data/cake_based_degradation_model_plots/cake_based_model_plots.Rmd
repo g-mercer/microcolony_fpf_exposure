@@ -1,0 +1,74 @@
+---
+title: "Cake Based Plots"
+author: "Guy Mercer"
+date: "30/09/2021"
+output: html_document
+---
+Input pollen and nectar data removing points before 0. 
+
+```{r}
+nectar_data <- read.csv(file ="input/nectar_residues_ugkg.csv")
+
+pollen_data <- read.csv(file ="input/pollen_residues_ugkg.csv")
+
+nectar_data <- nectar_data [nectar_data$DALA_h > 0, ]
+
+pollen_data <- pollen_data [pollen_data$DALA_h > 0, ]
+
+```
+
+First write the equation and return the line fitted by CAKE using the parameter estimates CAKE outputted. Do this for nectar first. Nectar the best fit was a bi-exponential model, also known as a Double First Order in Parallel model (DFOP). This has 4 parameters - Parent_0, k1_Parent, k2_Parent and g_Parent
+
+```{r}
+Parent_0 <- 4160
+
+k1_Parent <- 0.4179
+
+k2_Parent <- 0.02075
+
+g_Parent <- 0.7392
+
+x <- 1
+
+nectar_dfop_line <- function(x) {Parent_0 * (g_Parent * exp(-k1_Parent * x) + (1 - g_Parent) * exp(-k2_Parent * x))}
+
+nectar_dfop_line(x = 12)
+nectar_dfop_line(x = 36)
+nectar_dfop_line(x = 60)
+nectar_dfop_line(x = 108)
+nectar_dfop_line(x = 156)
+nectar_dfop_line(x = 204)
+
+
+
+
+```
+
+Now do the same for pollen. For pollen the only fit with confident parameters was the SFO..
+
+```{r}
+Parent_0 <- 74300
+k_Parent <- 0.1225
+
+  
+sfo_line <- function(x) {Parent_0 * exp(-k_Parent * x)}
+
+sfo_line(x = 12)
+sfo_line(x = 36)
+```
+
+pollen fomc
+
+```{r}
+Parent_0 <- 80600
+alpha <- 1.809
+beta <- 9.91
+
+fomc_line <- function(x) {Parent_0 / ((x / beta) + 1) ^ alpha}
+
+fomc_line(x = 12)
+fomc_line(x = 36)
+fomc_line(x = 60)
+
+```
+
