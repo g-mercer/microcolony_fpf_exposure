@@ -32,16 +32,18 @@ x <- 1
 
 nectar_dfop_line <- function(x) {Parent_0 * (g_Parent * exp(-k1_Parent * x) + (1 - g_Parent) * exp(-k2_Parent * x))}
 
+# halfway between 0-24
 nectar_dfop_line(x = 12)
+# halfway between 24-48
 nectar_dfop_line(x = 36)
-nectar_dfop_line(x = 60)
-nectar_dfop_line(x = 108)
-nectar_dfop_line(x = 156)
-nectar_dfop_line(x = 204)
-
-
-
-
+# halfway between 48-96
+nectar_dfop_line(x = 72)
+# halfway between 96-144
+nectar_dfop_line(x = 120)
+# halfway between 144-192
+nectar_dfop_line(x = 168)
+# halfway between 192-240
+nectar_dfop_line(x = 216)
 ```
 
 Now do the same for pollen. For pollen the only fit with confident parameters was the SFO..
@@ -68,7 +70,176 @@ fomc_line <- function(x) {Parent_0 / ((x / beta) + 1) ^ alpha}
 
 fomc_line(x = 12)
 fomc_line(x = 36)
-fomc_line(x = 60)
+mean(pollen_data$residue_measurement_ugkg [pollen_data$DALA_h > 24])
+```
 
+Visualise nectar in ggplot.
+
+```{r}
+library(tidyverse)
+
+# rename datframe
+nectar_total <- nectar_data
+colnames(nectar_total) <- c("t", "parent")
+
+# parameter estimates
+Parent_0 <- 4160
+
+k1_Parent <- 0.4179
+
+k2_Parent <- 0.02075
+
+g_Parent <- 0.7392
+
+x <- 1
+
+# model function
+nectar_dfop_line <- function(x) {Parent_0 * (g_Parent * exp(-k1_Parent * x) + (1 - g_Parent) * exp(-k2_Parent * x))}
+
+# degradation model plot function
+
+# rwrap function allows an interval of x to be defined to draw the model fit line
+rwrap=function(f,xmin,xmax){ff=function(x){y=f(x);y[x>xmax]=NA;y[x<xmin]=NA;y}}
+
+# function
+degradation_plot_function <- function(dataframe, model_prediction, input_colour, x_min_line, title) {
+  
+ggplot(data = dataframe, aes(x = t, y = parent)) +
+    
+xlab("Time (h)") +
+    
+ylab("Residue Measurements (µg/kg)") +
+
+geom_point(color = input_colour, alpha = 0.7) +
+
+stat_function(fun = rwrap(model_prediction, x_min_line, 240), colour = input_colour, alpha = 0.7) +
+
+theme_bw() +
+    
+ggtitle(title) +
+  
+theme(legend.position = "none", axis.title = element_text(size=8, face = "bold"), plot.title = element_text(hjust = 0.5, size = 14, face = "bold")) +
+    
+scale_x_continuous(limits = c(0, NA), breaks=seq(0,240,24)) # starts axis at 0 and defines ticks
+
+}
+
+# colour
+colour <- "#E66100"
+colour_lines <- "#5D3A9B"
+
+nectar_total_plot <- degradation_plot_function(dataframe = nectar_total, model_prediction = nectar_dfop_line, input_colour = colour, x_min_line = 0, title = "Nectar Dosage Regime")
+
+# adding the lines. 
+
+# define y values
+# halfway between 0-24
+t0_24 <- nectar_dfop_line(x = 12)
+# halfway between 24-48
+t24_48 <- nectar_dfop_line(x = 36)
+# halfway between 48-96
+t48_96 <- nectar_dfop_line(x = 72)
+# halfway between 96-144
+t96_144 <- nectar_dfop_line(x = 120)
+# halfway between 144-192
+t144_192 <- nectar_dfop_line(x = 168)
+# halfway between 192-240
+t192_240 <- nectar_dfop_line(x = 216)
+
+# add lines
+nectar_total_plot <- nectar_total_plot + geom_segment(aes(x=0,xend=24,y=t0_24,yend=t0_24), inherit.aes = FALSE, color = colour_lines, alpha = 0.7, data = data.frame()) # this weird solution is because the segment is drawn nrow(dataframe) times. What is done here is using an empty                                       dataframe to get round this unwanted behaviour link:                                                                                                 (https://stackoverflow.com/questions/48397603/alpha-in-geom-segment-not-working). 
+
+nectar_total_plot <- nectar_total_plot + geom_segment(aes(x=24,xend=48,y=t24_48,yend=t24_48), inherit.aes = FALSE, color = colour_lines, alpha = 0.7, data = data.frame())
+
+nectar_total_plot <- nectar_total_plot + geom_segment(aes(x=48,xend=96,y=t48_96,yend=t48_96), inherit.aes = FALSE, color = colour_lines, alpha = 0.7, data = data.frame())
+
+nectar_total_plot <- nectar_total_plot + geom_segment(aes(x=96,xend=144,y=t96_144,yend=t96_144), inherit.aes = FALSE, color = colour_lines, alpha = 0.7, data = data.frame())
+
+nectar_total_plot <- nectar_total_plot + geom_segment(aes(x=144,xend=192,y=t144_192,yend=t144_192), inherit.aes = FALSE, color = colour_lines, alpha = 0.7, data = data.frame())
+
+nectar_total_plot <- nectar_total_plot + geom_segment(aes(x=192,xend=240,y=t192_240,yend=t192_240), inherit.aes = FALSE, color = colour_lines, alpha = 0.7, data = data.frame())
+
+
+nectar_total_plot <- nectar_total_plot + geom_segment(aes(x=24,xend=24,y=t0_24,yend=t24_48), inherit.aes = FALSE, color = colour_lines, alpha = 0.7, data = data.frame())
+
+nectar_total_plot <- nectar_total_plot + geom_segment(aes(x=48,xend=48,y=t24_48,yend=t48_96), inherit.aes = FALSE, color = colour_lines, alpha = 0.7, data = data.frame())
+
+nectar_total_plot <- nectar_total_plot + geom_segment(aes(x=96,xend=96,y=t48_96,yend=t96_144), inherit.aes = FALSE, color = colour_lines, alpha = 0.7, data = data.frame())
+
+nectar_total_plot <- nectar_total_plot + geom_segment(aes(x=144,xend=144,y=t96_144,yend=t144_192), inherit.aes = FALSE, color = colour_lines, alpha = 0.7, data = data.frame())
+
+nectar_total_plot <- nectar_total_plot + geom_segment(aes(x=192,xend=192,y=t144_192,yend=t192_240), inherit.aes = FALSE, color = colour_lines, alpha = 0.7, data = data.frame())
+
+nectar_total_plot
+```
+
+Visualise pollen in ggplot
+
+```{r}
+# rename dataframe
+pollen_total <- pollen_data
+colnames(pollen_total) <- c("t", "parent")
+
+# parameter estimates
+Parent_0 <- 80600
+
+alpha <- 1.809
+
+beta <- 9.91
+
+fomc_line <- function(x) {Parent_0 / ((x / beta) + 1) ^ alpha}
+
+# model function
+pollen_fomc_line <- function(x) {Parent_0 / ((x / beta) + 1) ^ alpha}
+
+# colour
+colour <- "#1A85FF"
+colour_lines <- "#D41159"
+
+pollen_total_plot <- degradation_plot_function(dataframe = pollen_total, model_prediction = pollen_fomc_line, input_colour = colour, x_min_line = 0, title = "Pollen Dosage Regime")
+
+# adding the lines. 
+
+# define y values
+
+# halfway between 0-24
+t0_24 <- fomc_line(x = 12)
+# halfway between 24-48
+t24_48 <- fomc_line(x = 36)
+# from 48-240
+t48_240 <- mean(pollen_data$residue_measurement_ugkg [pollen_data$DALA_h > 24])
+
+# add lines
+pollen_total_plot <- pollen_total_plot + geom_segment(aes(x=0,xend=24,y=t0_24,yend=t0_24), inherit.aes = FALSE, color = colour_lines, alpha = 0.7, data = data.frame()) # this weird solution is because the segment is drawn nrow(dataframe) times. What is done here is using an empty                                       dataframe to get round this unwanted behaviour link:                                                                                                 (https://stackoverflow.com/questions/48397603/alpha-in-geom-segment-not-working). 
+
+pollen_total_plot <- pollen_total_plot + geom_segment(aes(x=24,xend=48,y=t24_48,yend=t24_48), inherit.aes = FALSE, color = colour_lines, alpha = 0.7, data = data.frame())
+
+pollen_total_plot <- pollen_total_plot + geom_segment(aes(x=48,xend=240,y=t48_240,yend=t48_240), inherit.aes = FALSE, color = colour_lines, alpha = 0.7, data = data.frame())
+
+
+pollen_total_plot <- pollen_total_plot + geom_segment(aes(x=24,xend=24,y=t0_24,yend=t24_48), inherit.aes = FALSE, color = colour_lines, alpha = 0.7, data = data.frame())
+
+pollen_total_plot <- pollen_total_plot + geom_segment(aes(x=48,xend=48,y=t24_48,yend=t48_240), inherit.aes = FALSE, color = colour_lines, alpha = 0.7, data = data.frame())
+
+pollen_total_plot
+```
+
+```{r}
+# save
+ cairo_pdf(file = "./output/nectar_degradation.pdf",   # The directory you want to save the file in
+     width = 8, # The width of the plot in inches
+     height = 6) # The height of the plot in inches
+
+nectar_total_plot
+
+ dev.off()
+ 
+  cairo_pdf(file = "./output/pollen_degradation.pdf",   # The directory you want to save the file in
+     width = 8, # The width of the plot in inches
+     height = 6) # The height of the plot in inches
+
+pollen_total_plot
+
+ dev.off()
 ```
 

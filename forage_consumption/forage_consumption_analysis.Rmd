@@ -1,0 +1,520 @@
+---
+title: "forage_consumption_analysis"
+author: "Guy Mercer"
+date: "02/12/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+Follow the Zuur process. 
+
+```{r}
+# import curated data
+sucrose <- read.csv(file = "output/sucrose_consumption_corrected_long.csv", )
+
+pollen <- read.csv(file = "output/pollen_consumption_corrected_long.csv")
+```
+
+Start with sucrose as I think it will be slightly easier. Visualisations.
+
+```{r}
+library(lattice)
+
+# sort out the variable classes
+sucrose$microcolony_number <- as.factor(sucrose$microcolony_number)
+sucrose$batch <- as.factor(sucrose$batch)
+sucrose$colony_derived_from <- as.factor(sucrose$colony_derived_from)
+sucrose$day <- as.numeric(sucrose$day)
+
+# have a look at the consumption
+xyplot(corrected_consumption ~ day, data = sucrose,
+       xlab = "Day", ylab = "Sucrose Consumption",
+       panel=function(x, y){
+         panel.xyplot(x, y, col = 1, cex = 0.5, pch = 1)
+         panel.grid(h = -1, v = 2)
+         panel.abline(v = 0, lty = 2)
+         if (length(x) > 5) panel.loess(x, y, span = 0.9,
+                                        col = 1, lwd = 2)
+         })
+
+# have a look at the consumption for every microcolony. 
+xyplot(corrected_consumption ~ day | microcolony_number, data = sucrose,
+       xlab = "Day", ylab = "Sucrose Consumption",
+       panel=function(x, y){
+         panel.xyplot(x, y, col = 1, cex = 0.5, pch = 1)
+         panel.grid(h = -1, v = 2)
+         panel.abline(v = 0, lty = 2)
+         if (length(x) > 5) panel.loess(x, y, span = 0.9,
+                                        col = 1, lwd = 2)
+         })
+
+# have a look at the consumption by treatment
+xyplot(corrected_consumption ~ day | treatment, data = sucrose,
+       xlab = "Day", ylab = "Sucrose Consumption",
+       panel=function(x, y){
+         panel.xyplot(x, y, col = 1, cex = 0.5, pch = 1)
+         panel.grid(h = -1, v = 2)
+         panel.abline(v = 0, lty = 2)
+         if (length(x) > 5) panel.loess(x, y, span = 0.9,
+                                        col = 1, lwd = 2)
+         })
+
+# have a look at the consumption by batch
+xyplot(corrected_consumption ~ day | batch, data = sucrose,
+       xlab = "Day", ylab = "Sucrose Consumption",
+       panel=function(x, y){
+         panel.xyplot(x, y, col = 1, cex = 0.5, pch = 1)
+         panel.grid(h = -1, v = 2)
+         panel.abline(v = 0, lty = 2)
+         if (length(x) > 5) panel.loess(x, y, span = 0.9,
+                                        col = 1, lwd = 2)
+         })
+
+# have a look at the consumption by treatment*batch
+xyplot(corrected_consumption ~ day | batch*treatment, data = sucrose,
+       xlab = "Day", ylab = "Sucrose Consumption",
+       panel=function(x, y){
+         panel.xyplot(x, y, col = 1, cex = 0.5, pch = 1)
+         panel.grid(h = -1, v = 2)
+         panel.abline(v = 0, lty = 2)
+         if (length(x) > 5) panel.loess(x, y, span = 0.9,
+                                        col = 1, lwd = 2)
+         })
+
+```
+First determine the random effects component. Use beyond optimal model:
+
+Certainly an increase in variance with day. Potentially a batch*treatment (overall) variance component too. fpf-pure3 has much less variation than control2 for example. Maybe even allowing the degree of variation increase with day to change depending on treatment batch combination. 
+
+Not interested in the effect of microcolony so should include this as a random effect. How to structure it? Compound symmetry where correlation for all observations within microcolony is the same or auto-regressive (or something else as unequal spacings) where correlation between observations depends on time gap between them? 
+
+Can't fit a smoother as not enough time (day) points. Back to the old quadratic. Centre the quadratic to reduce the collinearity. This causes an apparent discrepancy between the summary output and graphs until you think about it. When day = 0 the cday2 term = 0-37.21186xparameter estimate. 
+
+```{r}
+# beyond optimal model.
+
+# biologically this is my beyond optimal model. I can imagine both treatment and batch potentially affecting the # starting (intercept) consumption and the relationship between consumption and day. 
+
+# centre day squared
+sucrose$cday2 <- sucrose$day^2 - mean(sucrose$day^2)
+
+M.lm <- lm(corrected_consumption ~ day + cday2 + treatment + batch + treatment:batch + treatment:day + treatment:cday2 + batch:day + batch:cday2, data = sucrose)
+
+summary(M.lm)
+
+# use the residuals from this beyond optimal model
+plot(M.lm, which = c (1))
+```
+
+Clear violation of heterogeneity. Let's start by determining our optimal random effects structure. 
+
+```{r}
+library(nlme)
+
+M1.gls <- gls(corrected_consumption ~ day + cday2 + treatment + 
+                batch + treatment:batch + treatment:day + 
+                treatment:cday2 + batch:day + batch:cday2, 
+              data = sucrose, method = "REML")
+
+E <- resid(M1.gls)
+
+op <- par(mfrow = c(2, 2))
+
+boxplot(E ~ sucrose$treatment, main = "Treatment")
+abline(0, 0)
+
+boxplot(E ~ sucrose$batch, main = "Batch")
+abline(0, 0)
+
+boxplot(E ~ sucrose$treatment * sucrose$batch, main = "Treatment & Batch")
+abline(0, 0)
+
+boxplot(E ~ sucrose$microcolony_number, main = "Microcolony")
+abline(0, 0)
+
+par(op)
+
+plot(E ~ sucrose$day, main = "Microcolony")
+abline(0, 0)
+```
+
+Microcolony clearly needs to be included as an explanatory variable. Treatment * Batch shows some heterogeneity. Also heterogeneity increases with day and it looks like it might differ by treatmentxbatch combination. Apply and test random intercept first. Also, day:microcolony interaction, which suggests a random intercept and slope model may be more appropriate. 
+
+```{r}
+# random intercept?
+M1.lme <- lme(corrected_consumption ~ day + cday2 + treatment + batch + 
+                treatment:batch + treatment:day + treatment:cday2 + 
+                batch:day + batch:cday2, data = sucrose, 
+              random =~1 | microcolony_number, method = "REML")
+
+AIC(M1.gls, M1.lme)
+
+anova(M1.gls, M1.lme)
+
+library(lmtest)
+lrtest(M1.gls, M1.lme)
+
+# random intercept is great improvement. Random intercept and slope?
+M2.lme <- lme(corrected_consumption ~ day + cday2 + treatment + batch + treatment:batch + treatment:day + 
+                treatment:cday2 + batch:day + batch:cday2, data = sucrose, random =~1 + day + cday2 | microcolony_number,
+              method = "REML", control = lmeControl(opt = 'optim'))
+
+AIC(M1.gls, M1.lme, M2.lme)
+
+# there were issues with convergence. control setting is unconstrained optimization using BFGS.
+# Link https://stackoverflow.com/questions/7923387/error-with-nlme
+
+# random intercept and slope is a strong improvement again.
+
+# What about the variance structures?
+M2a.lme <- lme(corrected_consumption ~ day + cday2 + treatment + batch + treatment:batch + treatment:day + 
+                treatment:cday2 + batch:day + batch:cday2, data = sucrose, random =~1 + day + cday2 | microcolony_number,
+              method = "REML", control = lmeControl(opt = 'optim'),
+              weights = varIdent(form =~ 1 | treatment*batch))
+
+M2b.lme <- lme(corrected_consumption ~ day + cday2 + treatment + batch + treatment:batch + treatment:day + 
+                treatment:cday2 + batch:day + batch:cday2, data = sucrose, random =~1 + day + cday2 | microcolony_number,
+              method = "REML", control = lmeControl(opt = 'optim'),
+              weights = varPower(form =~ day))
+
+M2c.lme <- lme(corrected_consumption ~ day + cday2 + treatment + batch + treatment:batch + treatment:day + 
+                treatment:cday2 + batch:day + batch:cday2, data = sucrose, random =~1 + day + cday2 | microcolony_number,
+              method = "REML", control = lmeControl(opt = 'optim'),
+              weights = varComb(varIdent(form =~ 1 | treatment*batch), varPower(form =~ day)))
+
+M2d.lme <- lme(corrected_consumption ~ day + cday2 + treatment + batch + treatment:batch + treatment:day + 
+                treatment:cday2 + batch:day + batch:cday2, data = sucrose, random =~1 + day + cday2 | microcolony_number,
+              method = "REML", control = lmeControl(opt = 'optim'),
+              weights = varComb(varIdent(form =~ 1 | treatment*batch), varPower(form =~ day | treatment*batch)))
+
+AIC(M2.lme, M2a.lme, M2b.lme, M2c.lme, M2d.lme)
+
+# M2c.lme is the best 
+plot(M2c.lme, which = c (1))
+
+# see if an autoregressive correlation structure improves anything?
+M2e.lme <- gls(corrected_consumption ~ day + cday2 + treatment + batch + treatment:batch + treatment:day + 
+                treatment:cday2 + batch:day + batch:cday2, data = sucrose,
+               correlation = corAR1(form =~ day | microcolony_number), method = "REML",
+               weights = varComb(varIdent(form =~ 1 | treatment*batch), varPower(form =~ day)))
+
+AIC(M1.gls, M1.lme, M2.lme, M2c.lme, M2e.lme)
+
+# no
+```
+
+The optimal random effects structure is a random intercept and slope (1 + day + cday2 | microcolony) with a variance structure that allows for an increase in variance with day and a difference in variance between treatmentxbatch level (varPower(form =~ day)).
+
+
+```{r}
+# respecify candidate models so model structure is clear. 
+
+# linear model 
+M1.gls <- gls(corrected_consumption ~ day + cday2 + treatment + batch + treatment:batch + treatment:day + 
+                treatment:cday2 + batch:day + batch:cday2, data = sucrose, method = "REML")
+# extract residuals
+E.M1.gls <- resid(M1.gls, type = "normalized")
+
+# residuals vs fitted
+plot(M1.gls, which = c (1))
+
+# residuals vs day
+plot(E.M1.gls ~ sucrose$day, main = "Microcolony")
+abline(0, 0)
+
+# pattern and heterogeneity in both residual plots
+
+M2c.lme <- lme(corrected_consumption ~ day + cday2 + treatment + batch + treatment:batch + treatment:day + 
+                treatment:cday2 + batch:day + batch:cday2, data = sucrose, random =~1 + day + cday2 | microcolony_number,
+              method = "REML", control = lmeControl(opt = 'optim'),
+              weights = varComb(varIdent(form =~ 1 | treatment*batch), varPower(form =~ day)))
+
+# extract residuals
+E.M2c.lme <- resid(M2c.lme, type = "normalized")
+
+# residuals vs fitted
+plot(M2c.lme, which = c (1))
+
+# residuals vs day
+plot(E.M2c.lme ~ sucrose$day, main = "Microcolony")
+abline(0, 0)
+
+# heterogeneity now dealt with but still pattern in the plot. Common reason for pattern in plots is missing terms in model or poor model fit
+# ie it's not linear/ not quadratic. Try and rule out missing terms in model being the cause. 
+M2c.lme.all.int <- lme(corrected_consumption ~ day*cday2*treatment*batch,
+                       data = sucrose, random =~1 + day + cday2 | microcolony_number,
+                       method = "REML", control = lmeControl(opt = 'optim'),
+                       weights = varComb(varIdent(form =~ 1 | treatment*batch), varPower(form =~ day)))
+
+# extract residuals
+E.M2c.lme.all.int <- resid(M2c.lme.all.int, type = "pearson")
+
+# residuals vs fitted
+plot(M2c.lme.all.int, which = c (1))
+
+# residuals vs day
+plot(E.M2c.lme.all.int ~ sucrose$day, main = "Microcolony")
+abline(0, 0)
+
+# missing terms in the model not it. Pretty sure the quadratic function is not a perfect fit for the data. 
+```
+
+```{r}
+# quick summary of model with optimal random effects structure
+summary(M2c.lme)
+```
+The intercept is highly negatively correlated with day. So if the slope of day increases the intercept decreases. A trick to counteract this is to centre the day. Then again, I am not really interested in the intercept of factors but their interaction with day. Was consumption different over the course of the experiment, not at day 0 where consumption was unspiked sucrose. Also, centring the quadratic term didn't seem to do much. 
+
+```{r}
+# set method to ML
+M2c.lme <- lme(corrected_consumption ~ day + cday2 + treatment + batch + treatment:batch + treatment:day + 
+                treatment:cday2 + batch:day + batch:cday2, data = sucrose, random =~1 + day + cday2 | microcolony_number,
+              method = "ML", control = lmeControl(opt = 'optim'),
+              weights = varComb(varIdent(form =~ 1 | treatment*batch), varPower(form =~ day)))
+
+# what does AIC say?
+library(MASS)
+stepAIC(M2c.lme)
+```
+
+```{r}
+M2.lme.aic <- lme(corrected_consumption ~ day + cday2 + treatment + batch + day:batch, data = sucrose, random =~1 + day + cday2 | microcolony_number,
+              method = "ML", control = lmeControl(opt = 'optim'),
+              weights = varComb(varIdent(form =~ 1 | treatment*batch), varPower(form =~ day)))
+
+# batch:day significance
+M2.lme.aic.a <- update(M2.lme.aic, .~. - batch:day)
+
+anova(M2.lme.aic, M2.lme.aic.a )
+```
+
+
+```{r}
+M2c.lme <- lme(corrected_consumption ~ day + cday2 + treatment + batch + treatment:batch + treatment:day + 
+                treatment:cday2 + batch:day + batch:cday2, data = sucrose, random =~1 + day + cday2 | microcolony_number,
+              method = "ML", control = lmeControl(opt = 'optim'),
+              weights = varComb(varIdent(form =~ 1 | treatment*batch), varPower(form =~ day)))
+
+# round 1
+M2c.lme.a <- update(M2c.lme, .~. - batch:cday2)
+M2c.lme.b <- update(M2c.lme, .~. - batch:day)
+M2c.lme.c <- update(M2c.lme, .~. - treatment:cday2)
+M2c.lme.d <- update(M2c.lme, .~. - treatment:day)
+M2c.lme.e <- update(M2c.lme, .~. - treatment:batch)
+anova(M2c.lme, M2c.lme.a)
+anova(M2c.lme, M2c.lme.b)
+anova(M2c.lme, M2c.lme.c)
+anova(M2c.lme, M2c.lme.d)
+anova(M2c.lme, M2c.lme.e)
+
+# round 2
+M2c.lme.f <- update(M2c.lme.e, .~. - batch:cday2)
+M2c.lme.g <- update(M2c.lme.e, .~. - batch:day)
+M2c.lme.h <- update(M2c.lme.e, .~. - treatment:cday2)
+M2c.lme.i <- update(M2c.lme.e, .~. - treatment:day)
+anova(M2c.lme.e, M2c.lme.f)
+anova(M2c.lme.e, M2c.lme.g)
+anova(M2c.lme.e, M2c.lme.h)
+anova(M2c.lme.e, M2c.lme.i)
+
+# round 3
+M2c.lme.j <- update(M2c.lme.i, .~. - batch:cday2)
+M2c.lme.k <- update(M2c.lme.i, .~. - batch:day)
+M2c.lme.l <- update(M2c.lme.i, .~. - treatment:cday2)
+anova(M2c.lme.i, M2c.lme.j)
+anova(M2c.lme.i, M2c.lme.k)
+anova(M2c.lme.i, M2c.lme.l)
+
+# round 4
+M2c.lme.m <- update(M2c.lme.l, .~. - batch:cday2)
+M2c.lme.n <- update(M2c.lme.l, .~. - batch:day)
+M2c.lme.o <- update(M2c.lme.l, .~. - treatment)
+anova(M2c.lme.l, M2c.lme.m)
+anova(M2c.lme.l, M2c.lme.n)
+anova(M2c.lme.l, M2c.lme.o)
+
+# round 5
+M2c.lme.p <- update(M2c.lme.m, .~. - cday2)
+M2c.lme.q <- update(M2c.lme.m, .~. - batch:day)
+M2c.lme.r <- update(M2c.lme.m, .~. - treatment)
+anova(M2c.lme.m, M2c.lme.p)
+anova(M2c.lme.m, M2c.lme.q)
+anova(M2c.lme.m, M2c.lme.r)
+
+# round 6
+# M2c.lme.s <- update(M2c.lme.r, .~. - cday2)
+# anova(M2c.lme.r, M2c.lme.s)
+
+M2c.lme.t <- update(M2c.lme.r, .~. - batch:day)
+anova(M2c.lme.r, M2c.lme.t)
+```
+
+Result of manual model selection of fixed effects. Go ahead with this model as it is simpler. 
+
+```{r}
+# refit with REML
+M2c.lme.r <- update(M2c.lme.r, method = "REML")
+
+summary(M2c.lme.r)
+```
+
+Model Validation 
+
+```{r}
+# extract residuals
+E.M2c.lme.r <- resid(M2c.lme.r, type = "pearson")
+
+# residuals vs fitted
+plot(M2c.lme.r, which = c (1))
+
+xyplot(E.M2c.lme.r ~ day, data = sucrose,
+       xlab = "Day", ylab = "Pearson Residuals",
+       panel=function(x, y){
+         panel.xyplot(x, y, col = 1, cex = 0.5, pch = 1)
+         panel.grid(h = -1, v = 2)
+         panel.abline(v = 0, lty = 2)
+         if (length(x) > 5) panel.loess(x, y, span = 0.6,
+                                        col = 1, lwd = 2)
+         })
+
+# batches are different
+xyplot(E.M2c.lme.r ~ day | batch, data = sucrose,
+       xlab = "Day", ylab = "Pearson Residuals",
+       panel=function(x, y){
+         panel.xyplot(x, y, col = 1, cex = 0.5, pch = 1)
+         panel.grid(h = -1, v = 2)
+         panel.abline(v = 0, lty = 2)
+         if (length(x) > 5) panel.loess(x, y, span = 0.6,
+                                        col = 1, lwd = 2)
+         })
+```
+
+It's clear that I require additive modelling. mgcv is not possible with cubic regression splines but explore LOWESS (LOESS function), with gam function. 
+
+Plot some fitted lines against observed values. 
+
+```{r}
+# plot
+# predict values
+consumption <- predict(M2c.lme.r, value = "response")
+
+# generate line components
+dayvalues <- seq(1, 10, 0.1)
+
+data_list <- list()
+
+for (i in 1:length(unique(sucrose$batch))) {
+  mydata <- data.frame(
+    day = dayvalues,
+    cday2 = dayvalues^2-mean(sucrose$day^2),
+    batch = unique(sucrose$batch) [i])
+  
+  data_list [[i]] <- mydata
+}
+
+line_list <- list()
+
+# re.form = NA, if NA or ~0, include no random effects.
+
+for (i in 1:length(data_list)) {
+  
+  line <- predict(M2c.lme.r, data_list [[i]], type = "response", level = 0)
+  
+  line_list [[i]] <- line
+  
+}
+
+plot(x = sucrose$day, y = sucrose$corrected_consumption, main = "Fitted Values", xlim = c(0,10), ylim = c(0,8))
+
+ for (i in 1:length(line_list)) {
+       
+            lines(mydata$day, line_list [[i]])
+ }
+
+plot(x = sucrose$day [sucrose$batch == 1], y = sucrose$corrected_consumption [sucrose$batch == 1], main = "Fitted Values", xlim = c(0,10), ylim = c(0,8))
+
+lines(mydata$day, line_list [[1]])
+
+plot(x = sucrose$day [sucrose$batch == 2], y = sucrose$corrected_consumption [sucrose$batch == 2], main = "Fitted Values", xlim = c(0,10), ylim = c(0,8))
+
+lines(mydata$day, line_list [[2]])
+
+plot(x = sucrose$day [sucrose$batch == 3], y = sucrose$corrected_consumption [sucrose$batch == 3], main = "Fitted Values", xlim = c(0,10), ylim = c(0,8))
+
+lines(mydata$day, line_list [[3]])
+```
+
+```{r}
+# plotting chunk
+# predict values
+consumption <- predict(M.lm, value = "response")
+
+# generate line components
+dayvalues <- seq(1, 10, 0.1)
+
+data_list <- list()
+
+for (i in 1:length(unique(sucrose$batch))) {
+  mydata <- data.frame(
+    day = dayvalues,
+    cday2 = dayvalues^2-mean(sucrose$day^2),
+    batch = unique(sucrose$batch) [i],
+    treatment = "control"  )
+  
+  data_list [[i]] <- mydata
+}
+
+for (i in 1:length(unique(sucrose$batch))) {
+  mydata <- data.frame(
+    day = dayvalues,
+    cday2 = dayvalues^2-mean(sucrose$day^2),
+    batch = unique(sucrose$batch) [i],
+    treatment = "fpf-pure"  )
+  
+  data_list [[i+3]] <- mydata
+}
+
+line_list <- list()
+
+for (i in 1:6) {
+  
+  line <- predict(M.lm, data_list [[i]], type = "response")
+  
+  line_list [[i]] <- line
+  
+}
+
+plot(x = sucrose$day, y = consumption, main = "Fitted Values", xlim = c(0,10), ylim = c(0,6))
+
+ for (i in 1:6) {
+       
+            lines(mydata$day, line_list [[i]])
+     }
+
+```
+
+```{r}
+# what polynomial do I have to go to before these residual patterns start to dissipate?
+# the random effects structure isn't the same as above but this is only illustrative of the issue I am facing
+# random intercept and slope model on sqrt transformed data with quartic term
+M2.lmer.t.quartic <- lmer(sqrt(corrected_consumption) ~ day + cday2 + I(day^3) + I(day^4) + treatment + batch + treatment:batch + treatment:day + 
+                treatment:cday2 + treatment:I(day^3) + treatment:I(day^4) + batch:day + batch:cday2 + batch:I(day^3) + batch:I(day^4) + (1 + day + cday2 +
+                                                                                                                          I(day^3) + I(day^4) |
+                                                                                                                          microcolony_number), 
+                data = sucrose, REML = TRUE)
+
+# extract residuals
+E.M2.lmer.t.quartic <- resid(M2.lmer.t.quartic, type = "pearson")
+
+# residuals vs fitted
+plot(M2.lmer.t.quartic, which = c (1))
+
+# residuals vs day
+plot(E.M2.lmer.t.quartic ~ sucrose$day, main = "Microcolony")
+abline(0, 0)
+
+# even this isn't perfect. 
+```

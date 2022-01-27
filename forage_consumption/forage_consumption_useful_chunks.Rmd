@@ -1,0 +1,43 @@
+---
+title: "Sucrose Consumption Analysis First Attempt"
+author: "Guy Mercer"
+date: "02/12/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+# import curated data
+filtered_long_format <- read.csv(file = "output/sucrose_consumption_corrected_long.csv", )
+
+pollen_filtered_long_format <- read.csv(file = "output/pollen_consumption_corrected_long.csv")
+```
+
+```{r}
+library(tidyverse)
+
+consumption_by_day_for_treatment_plot <- function(filtered_long_format, forage) {
+  
+  # Plot the relationship between sucrose consumption and day for each level in treatment
+  p2 <- ggplot(data = filtered_long_format,
+        aes(x = filtered_long_format$day, y = filtered_long_format$corrected_consumption)) +
+        geom_point(pch = 1, colour = "steelblue") + 
+        theme_bw() +
+        labs(x = "Day",
+             y = paste0(forage," Consumption per Microcolony (g)", sep = "")) +
+        facet_wrap(facets = filtered_long_format$treatment, 
+                   nrow = 2)
+  
+  return(p2)
+
+}
+
+sucrose_initial_plot <- consumption_by_day_for_treatment_plot(filtered_long_format = filtered_long_format, forage = "Sucrose")
+sucrose_initial_plot
+
+pollen_initial_plot <- consumption_by_day_for_treatment_plot(filtered_long_format = pollen_filtered_long_format, forage = "Pollen")
+pollen_initial_plot
+```

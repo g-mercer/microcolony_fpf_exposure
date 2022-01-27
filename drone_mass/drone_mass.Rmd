@@ -1,0 +1,206 @@
+---
+title: "Drone Mass Analysis"
+author: "Guy Mercer"
+date: "20/01/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+Load tidyverse
+
+```{r}
+library(tidyverse)
+```
+
+Import data and give all the variables the suitable class
+
+```{r}
+drone_mass_df <- read.csv("input/drone_mass.csv")
+
+drone_mass_df$drone_number <- as.numeric(drone_mass_df$drone_number)
+
+drone_mass_df$microcolony_number <- as.factor(drone_mass_df$microcolony_number)
+
+drone_mass_df$batch <- as.factor(drone_mass_df$batch)
+
+drone_mass_df$colony_number <- as.factor(drone_mass_df$colony_number)
+
+drone_mass_df$treatment <- as.factor(drone_mass_df$treatment)
+
+drone_mass_df$dry_mass_g <- as.numeric(drone_mass_df$dry_mass_g)
+```
+
+Express drone mass in terms of mg not g and update column header
+
+```{r}
+drone_mass_df$dry_mass_g <- drone_mass_df$dry_mass_g * 1000
+
+colnames(drone_mass_df) [6] <- "drone_mass_mg"
+```
+
+Data Exploration
+
+```{r}
+# Cleveland Dot Plot. First make column with 1 and 2 that correspond to Treatment levels
+
+drone_mass_df$clevelandcode <- factor(
+ifelse(drone_mass_df$treatment == "control",
+1,
+2))
+
+drone_mass_df$clevelandcode <- as.numeric(drone_mass_df$clevelandcode)
+
+dotchart(drone_mass_df$drone_mass_mg,
+         groups = factor(drone_mass_df$clevelandcode),
+         ylab = "Order of observations",
+         xlab = "Drone Mass (mg)", main = "Cleveland dotplot", pch = drone_mass_df$clevelandcode)
+
+boxplot(drone_mass_mg ~ treatment * batch,
+        varwidth = TRUE, xlab = "Treatment",
+        main = "Boxplot of Drone Mass Conditional on Treatment and Batch", 
+        ylab = "Drone Mass", data = drone_mass_df)
+
+boxplot(drone_mass_mg ~ batch,
+        varwidth = TRUE, xlab = "Treatment",
+        main = "Boxplot of Drone Mass Conditional on Batch", 
+        ylab = "Drone Mass", data = drone_mass_df)
+
+boxplot(drone_mass_mg ~ treatment,
+        varwidth = TRUE, xlab = "Treatment",
+        main = "Boxplot of Drone Mass Conditional on Treatment", 
+        ylab = "Drone Mass", data = drone_mass_df)
+```
+
+Data Exploration wasn't difficult as I haven't got many explanatory variables to choose from. I think a suitable starting model is
+
+drone mass ~ treatment * batch + (1 | colony/microcolony) 
+
+Let's begin with a linear model
+
+```{r}
+M.lm <- lm(drone_mass_mg ~ treatment * batch,
+           data = drone_mass_df)
+
+drop1(M.lm, test = "F")
+
+# and the residuals vs fitted
+plot(M.lm, which = c (1))
+```
+
+Violation of homogeneity. Refit with gls and look at the residuals vs treatment, batch and treatment*batch. Also look at residuals vs microcolony. 
+
+```{r}
+library(nlme)
+M1.gls <- gls(drone_mass_mg ~ treatment * batch,
+           data = drone_mass_df)
+
+E <- resid(M1.gls)
+
+op <- par(mfrow = c(2, 2))
+
+boxplot(E ~ drone_mass_df$treatment, main = "Treatment")
+abline(0, 0)
+
+boxplot(E ~ drone_mass_df$batch, main = "Batch")
+abline(0, 0)
+
+boxplot(E ~ drone_mass_df$treatment * drone_mass_df$batch, main = "Treatment & Batch")
+abline(0, 0)
+
+boxplot(E ~ drone_mass_df$microcolony_number, main = "Microcolony")
+abline(0, 0)
+```
+
+The variance looks different for various treatment batch combinations. Also, for some microcolonies all the residuals are above or below 0, showing it should be included as an explanatory effect, in this case a random effect. 
+
+Fit varIdent variance structure and microcolony/colony as a random effect. 
+
+```{r}
+# start with random intercept
+M1.lme <- lme(drone_mass_mg ~ treatment * batch,
+              data = drone_mass_df,
+              random = ~ 1 | colony_number/microcolony_number, method = "REML")
+
+AIC(M1.lme, M1.gls)
+anova(M1.gls, M1.lme)
+
+# large improvement. Add varIdent
+M2.lme <- lme(drone_mass_mg ~ treatment * batch,
+              data = drone_mass_df,
+              weights = varIdent(form = ~ 1 | treatment * batch),
+              random = ~ 1 | colony_number/microcolony_number, method = "REML")
+
+anova(M1.lme, M2.lme)
+
+# small improvement
+
+# command plots the standardised residuals versus fitted values
+plot(M1.lme, col = 1) 
+plot(M2.lme, col = 1) 
+
+E1 <- resid(M1.lme)
+boxplot(E1 ~ drone_mass_df$treatment * drone_mass_df$batch, main = "Treatment & Batch")
+abline(0, 0)
+
+E2 <- resid(M2.lme)
+boxplot(E2 ~ drone_mass_df$treatment * drone_mass_df$batch, main = "Treatment & Batch")
+abline(0, 0)
+```
+
+First point of slight confusion. Slightly different approaches are taken when finding the optimal random structure in the textbook. One example fits a random intercept and variance structure and then drops each of them from the model. Then compares anova(). If I do this both are significant. I drop the random intercept and p<0.0001. I drop the varIdent and p < 0.0306. What I have done above is analagous to this. 
+
+If, however, I had started with the variance structure and compared to M1.gls, the basic model, none of the the varIdent options (treatment*batch, batch, treatment) were improvements. This is another common approach Zuur takes. 
+
+I have looked at the residuals vs fitted for each model and residuals vs batchxtreatment and adding batchxtreatment variance structure does not seem to improve it. Therefore I am going to remove it and go for the simpler model.
+
+Continue with M1.lme. Model selection of fixed terms.
+
+```{r}
+# redefine with ML
+M1.lme <- lme(drone_mass_mg ~ treatment * batch,
+              data = drone_mass_df,
+              random = ~ 1 | colony_number/microcolony_number, method = "ML")
+
+# drop interaction term
+M1.lmeA <- update(M1.lme, .~. -batch:treatment)
+
+anova(M1.lme, M1.lmeA)
+
+# dropped interaction term
+
+# drop batch
+M1.lmeB <- update(M1.lmeA, .~. -batch)
+
+anova(M1.lmeB, M1.lmeA)
+
+# dropped batch
+
+# drop treatment 
+M1.lmeC <- update(M1.lmeB, .~. -treatment)
+
+anova(M1.lmeC, M1.lmeB)
+
+# nothing left bar an intercept
+# model validation. Bit pointless
+plot(M1.lmeC, col = 1)
+
+# refit model with REML
+M1.lmeC <- lme(drone_mass_mg ~ 1,
+               data = drone_mass_df,
+               random = ~ 1 | colony_number/microcolony_number, method = "REML")
+
+summary(M1.lmeC)
+
+# adding variance structure for treatment and batch does improve residuals slightly. 
+M1.lmeD <- lme(drone_mass_mg ~ 1,
+               data = drone_mass_df,
+               weights = varIdent(form = ~ 1 | treatment * batch),
+               random = ~ 1 | colony_number/microcolony_number, method = "REML")
+
+plot(M1.lmeD, col = 1)
+```
+
+

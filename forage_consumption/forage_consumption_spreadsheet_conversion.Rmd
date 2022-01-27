@@ -12,72 +12,373 @@ knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 ```{r}
 library(tidyverse)
 
+# pollen chunk. 
 # import
-forage_consumption_raw <- read.csv("input/forage_consumption.csv")
+for_con_test  <- read.csv("input/forage_consumption.csv")
 
-# take only values for first correction
-for_con_test <- forage_consumption_raw [, 1:9]
-
-# create uncorrected column by in - out. If out value is 0 put NA in uncorrected column
-for_con_test$uncorrected_pollen_con_day_1 <- 0
-
-for (i in 1:nrow(for_con_test)) {
+# day 1 has to have a separate function due to different spacings between the columns that have to be subtracted from 
+# one another. 
+day_1_function <- function(for_con_test) {
   
-  if (for_con_test$pollen.out.day.2 [i] > 0) {
+  # create uncorrected column by in - out. If out value is 0 put 0 in uncorrected column
+  for_con_test$uncorrected_pollen_con_day_1 <- 0
   
-  for_con_test$uncorrected_pollen_con_day_1 [i] <- for_con_test$pollen.in.day.1 [i] - for_con_test$pollen.out.day.2 [i]
-
-  } else {
+  # approaching it row by row allows the insertion of 0s where necessary
+  for (i in 1:nrow(for_con_test)) {
   
-  for_con_test$uncorrected_pollen_con_day_1 [i] <- 0
-
-  }
+    if (for_con_test$pollen.out.day.2 [i] > 0) {
   
-}
+      for_con_test$uncorrected_pollen_con_day_1 [i] <- for_con_test$pollen.in.day.1 [i] - for_con_test$pollen.out.day.2 [i]
 
-# correct using evap control average within batch. If evap control = 0 remove and only use remaining values to calculate mean. 
-corrected_average <- tibble()
-
-for (i in 1:length(unique(for_con_test$batch))) {
-
-  by_batch <- for_con_test [for_con_test$batch == i,]
-
-  by_batch$corrected_pollen_con_day_1_average <- 0
+    } else {
   
-  filtered_ec_values <- c()
+    for_con_test$uncorrected_pollen_con_day_1 [i] <- 0
 
-  for (i in 1:length(by_batch$uncorrected_pollen_con_day_1 [grep(pattern = "EC", x = by_batch$microcolony.number)])) {
-  
-    if (by_batch$uncorrected_pollen_con_day_1 [grep(pattern = "EC", x = by_batch$microcolony.number)] [i] > 0) {
-    
-      filtered_ec_values <- c(filtered_ec_values, by_batch$uncorrected_pollen_con_day_1 [grep(pattern = "EC", x = by_batch$microcolony.number)] [i])
-    
     }
   
   }
+
+  # correct using evap control average within batch. If evap control = 0 remove and only use remaining values to calculate mean. 
+  corrected_average <- tibble()
+
+  for (i in 1:length(unique(for_con_test$batch))) {
+
+    by_batch <- for_con_test [for_con_test$batch == i,]
+
+    by_batch$corrected_pollen_con_day_1_average <- 0
   
-    for (i in 1:nrow(by_batch)) {
+    filtered_ec_values <- c()
+    
+    # this loop filters out 0s from the evaporation controls so consumption is only corrected using 
+    # evaporation control values that weren't discounted
+    for (i in 1:length(by_batch$uncorrected_pollen_con_day_1 [grep(pattern = "EC", x = by_batch$microcolony.number)])) {
   
-      if (by_batch$uncorrected_pollen_con_day_1 [i] != 0) {
+      if (by_batch$uncorrected_pollen_con_day_1 [grep(pattern = "EC", x = by_batch$microcolony.number)] [i] > 0) {
+    
+        filtered_ec_values <- c(filtered_ec_values, by_batch$uncorrected_pollen_con_day_1 [grep(pattern = "EC", x =                                                            by_batch$microcolony.number)]            [i])
+      }
+      
+    }
+    
+    # each MC in each batch, if not 0, is corrected by the mean of the filtered evaporation controls. 
+      for (i in 1:nrow(by_batch)) {
   
-      by_batch$corrected_pollen_con_day_1_average [i] <- by_batch$uncorrected_pollen_con_day_1 [i] -
+        if (by_batch$uncorrected_pollen_con_day_1 [i] != 0) {
+  
+        by_batch$corrected_pollen_con_day_1_average [i] <- by_batch$uncorrected_pollen_con_day_1 [i] -
                                                          mean(filtered_ec_values)
 
-      } else {
+        } else {
   
-     by_batch$corrected_pollen_con_day_1_average [i] <- 0
+        by_batch$corrected_pollen_con_day_1_average [i] <- 0
+
+      }
+    
+    }
+
+  corrected_average <- rbind(corrected_average, by_batch)
+
+  }
+
+  corrected_average <- corrected_average [, c(1:4, 35:36)]
+  
+  return(corrected_average)
+
+}
+
+day_1_uncorrected <- day_1_function(for_con_test = for_con_test)
+
+# for the rest of the days a function based on column indexing can be created (as the gap is always 4). Then this function can be 
+# fed into a loop to yield the right corrections. 
+averaging_function <- function(for_con_test, daycol) { 
+
+  uncorrected_pollen <- tibble()
+  
+  for (i in 1:nrow(for_con_test)) {
+  
+    if (for_con_test [i , daycol+4] > 0) {
+  
+    uncorrected_pollen [i, 1] <- for_con_test [i, daycol] - for_con_test [i, daycol+4]
+
+    } else {
+  
+    uncorrected_pollen [i, 1] <- 0
 
     }
     
   }
+  
+  return(uncorrected_pollen)
+}
 
-corrected_average <- rbind(corrected_average, by_batch)
+# df to feed function
+uncorrected_df <- tibble(matrix(nrow = 69, ncol = 5))
+
+for (i in 1:length(seq(9, 29, by = 5))) {
+  
+  uncorrected_by_day <- averaging_function(for_con_test = for_con_test, daycol = seq(9, 29, by = 5) [i])
+  
+  uncorrected_df [, i] <- uncorrected_by_day
+  
+}
+
+# bind day 1 to the day 2 onwards
+uncorrected_df <- cbind(day_1_uncorrected [, 5], uncorrected_df)
+
+colnames(uncorrected_df) <- c("day_1","day_2", "day_3_4", "day_5_6", "day_7_8", "day_9_10")
+
+uncorrected_df <- cbind(for_con_test [, 1:4], uncorrected_df)
+
+# correction function
+correction_function <- function(uncorrected_df) {
+  
+  batch_columns_combined <- tibble()
+
+  # separate batch
+  for (i in 1:length(unique(uncorrected_df$batch))) {
+  
+    by_batch <- uncorrected_df [uncorrected_df$batch == i,]
+  
+    corrected_columns_combined <- tibble(matrix(nrow = 23, ncol = 6))
+    
+    # for each day column in batch
+    for (j in 1:ncol(by_batch[,5:10])) {
+  
+      name_day_columns <- by_batch[,c(1,5:10)] [c(1,j+1)]
+    
+     by_day_ec_average <- name_day_columns [grep(pattern = "EC", x = name_day_columns$microcolony.number), ]
+    
+      filtered_ec_values <- c()
+      
+      # average evap controls
+      for (k in 1:nrow(by_day_ec_average)) {
+        
+        if (by_day_ec_average [k, 2] > 0) {
+      
+        filtered_ec_values <- c(filtered_ec_values, by_day_ec_average [k, 2])
+        
+        }
+        
+      }
+        
+      corrected_day_column <- tibble(matrix(nrow = 23, ncol = 1))
+        
+        # correct each row within each day column with the mean of the evap controls for that day
+        for (l in 1:nrow(name_day_columns)) {
+        
+          if (name_day_columns [l, 2] > 0) {
+            
+            corrected_day_column [l, 1] <- name_day_columns [l, 2] - mean(filtered_ec_values)
+            
+          }  else {
+            
+              corrected_day_column [l, 1] <- 0
+       }
+    }
+      
+    corrected_columns_combined [, j] <- corrected_day_column
+      
+  }
+    
+  batch_columns_combined <- rbind(batch_columns_combined, corrected_columns_combined)
+
+}
+  
+corrected_plus_uncorrected_values <- cbind(uncorrected_df, batch_columns_combined)
+
+colnames(corrected_plus_uncorrected_values) <- c("microcolony_number", "batch", "colony_derived_from", "treatment", "day_1","day_2", "day_3_4", "day_5_6", "day_7_8", "day_9_10", "day_1_corr","day_2_corr", "day_3_4_corr", "day_5_6_corr", "day_7_8_corr", "day_9_10_corr")
+
+return(corrected_plus_uncorrected_values)
+  
+}
+
+corrected_df <- correction_function(uncorrected_df = uncorrected_df)
+
+# batch 2 day_7_8 has NAs because there were no EC values to correct with. 
+# take average of batch 2 day_5_6 and day_9_10 to correct these values. 
+day_7_8_b2_function <- function(corrected_df) {
+  
+  batch_2 <- corrected_df [corrected_df$batch == 2,]
+  
+  batch_2_ec <- batch_2 [grep(pattern = "EC", x = batch_2$microcolony_number), ]
+  
+  batch_2_ec_day_5_6_9_10 <- as.data.frame(c(batch_2_ec$day_5_6, batch_2_ec$day_9_10))
+  
+  filtered_ec_values <- c()
+  
+  for (i in 1:nrow(batch_2_ec_day_5_6_9_10)) {
+    
+    if (batch_2_ec_day_5_6_9_10 [i, 1] > 0) {
+      
+      filtered_ec_values <- c(filtered_ec_values, batch_2_ec_day_5_6_9_10 [i, 1])
+      
+    }
+    
+  }
+  
+  mean_ec_values <- mean(filtered_ec_values)
+  
+  corrected_day_7_8_col <- c()
+  
+  for (i in 1:nrow(batch_2)) {
+    
+      if (batch_2$day_7_8 [i] != 0) {
+      
+        corrected_value <- batch_2$day_7_8 [i] - mean_ec_values
+        
+        corrected_day_7_8_col [i] <- corrected_value
+  
+      } else {corrected_day_7_8_col [i] <- 0}
+  } 
+  
+  corrected_df$day_7_8_corr [corrected_df$batch == 2] <- corrected_day_7_8_col
+  
+  return (corrected_df)
 
 }
 
-# expand this to the complete dataframe
-# modify for sucrose
-# convert data into correct format with day as a variable (more rows less columns )
-# write a script to correct using the evap control closest to the microcolony in question. 
+corrected_df <- day_7_8_b2_function(corrected_df = corrected_df)
 
+# remove evap control rows
+corrected_df <- corrected_df [-grep(pattern = "EC", x = corrected_df$microcolony_number), ]
+```
+
+```{r}
+# sucrose chunk
+# uncorrected function first for day 1-8, day 9-11 is different due to different gap.
+sucrose_uncorrected_function <- function(for_con_test, daycol) {
+  
+  uncorrected_sucrose <- tibble()
+  
+  for (i in 1:nrow(for_con_test)) {
+  
+    if (for_con_test [i , daycol+4] > 0) {
+  
+    uncorrected_sucrose [i, 1] <- for_con_test [i, daycol] + for_con_test [i, daycol+1] - for_con_test [i, daycol+4]
+
+    } else {
+  
+    uncorrected_sucrose [i, 1] <- 0
+
+    }
+    
+  }
+  
+  return(uncorrected_sucrose)
+}
+
+sucrose_uncorrected_function_day_9 <- function(for_con_test, daycol) {
+  
+  uncorrected_sucrose <- tibble()
+  
+  for (i in 1:nrow(for_con_test)) {
+  
+    if (for_con_test [i , daycol+3] > 0) {
+  
+    uncorrected_sucrose [i, 1] <- for_con_test [i, daycol] + for_con_test [i, daycol+1] - for_con_test [i, daycol+3]
+
+    } else {
+  
+    uncorrected_sucrose [i, 1] <- 0
+
+    }
+    
+  }
+  
+  return(uncorrected_sucrose)
+}
+
+# df to feed function
+uncorrected_df_sucrose <- tibble(matrix(nrow = 69, ncol = 5))
+
+for (i in 1:length(seq(6, 26, by = 5))) {
+  
+  uncorrected_by_day <- sucrose_uncorrected_function(for_con_test = for_con_test, daycol = seq(6, 26, by = 5) [i])
+  
+  uncorrected_df_sucrose [, i] <- uncorrected_by_day
+  
+  rm(uncorrected_by_day)
+}
+
+uncorrected_day_9 <- sucrose_uncorrected_function_day_9(for_con_test = for_con_test, daycol = 31)
+
+sucrose_uncorrected_df <- cbind(for_con_test [, 1:4], uncorrected_df_sucrose, uncorrected_day_9)
+
+colnames(sucrose_uncorrected_df) [5:10] <- c("day_1","day_2", "day_3_4", "day_5_6", "day_7_8", "day_9_10")
+
+sucrose_corrected_df <- correction_function(uncorrected_df = sucrose_uncorrected_df)
+
+# remove evap control rows
+sucrose_corrected_df <- sucrose_corrected_df [-grep(pattern = "EC", x = sucrose_corrected_df$microcolony_number), ]
+```
+
+``` {r}
+# transform my data into long format
+sucrose_corrected_df <- sucrose_corrected_df [, c(1:4,11:16)]
+
+pollen_corrected_df <- corrected_df [, c(1:4,11:16)]
+
+long_format_function <- function(corrected_df) {
+  
+  measurement_days <- c(1, 2, 4, 6, 8, 10)
+
+  long_format <- tibble()
+
+  for (i in 1:length(measurement_days)) {
+  
+    day_column <- as.data.frame(corrected_df [, 4+i])
+  
+    day <- measurement_days [i]
+  
+    day_column$day <- day
+    
+    colnames(day_column) <- NULL
+    
+    day_column <- cbind(corrected_df [, 1:4], day_column)
+    
+    colnames(day_column) [5:6] <- c("corrected_consumption", "day")
+    
+    long_format <- rbind(long_format, day_column)
+  
+  }
+  
+  return(long_format)
+  
+}
+# first sucrose
+long_format <- long_format_function(corrected_df = sucrose_corrected_df)
+# filter out 0 rows where spills occurred. Only 6 spills.
+filtered_long_format <- long_format [long_format$corrected_consumption > 0, ]
+# change batch to factor
+filtered_long_format$batch <- as.factor(filtered_long_format$batch)
+# change colony_derived_from to factor
+filtered_long_format$colony_derived_from <- as.factor(filtered_long_format$colony_derived_from)
+
+# now for pollen
+pollen_long_format <- long_format_function(corrected_df = pollen_corrected_df)
+# filter out 0 rows where spills occurred. 16 spills removed
+pollen_filtered_long_format <- pollen_long_format [pollen_long_format$corrected_consumption != 0, ]
+# set negative values to 0
+for (i in 1:nrow(pollen_filtered_long_format)) {
+  
+  if (pollen_filtered_long_format$corrected_consumption [i] < 0) {
+    
+    pollen_filtered_long_format$corrected_consumption [i] <- 0
+    
+  }
+  
+}
+# check for negative values
+pollen_filtered_long_format [pollen_filtered_long_format$corrected_consumption < 0, ]
+# change batch to factor
+pollen_filtered_long_format$batch <- as.factor(pollen_filtered_long_format$batch)
+# change colony_derived_from to factor
+pollen_filtered_long_format$colony_derived_from <- as.factor(pollen_filtered_long_format$colony_derived_from)
+```
+
+Save pollen and sucrose filtered long format to csv files
+
+```{r}
+write.csv(filtered_long_format, file = "output/sucrose_consumption_corrected_long.csv", row.names = FALSE)
+write.csv(pollen_filtered_long_format, file = "output/pollen_consumption_corrected_long.csv", row.names = FALSE)
 ```

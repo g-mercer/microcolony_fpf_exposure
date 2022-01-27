@@ -1,0 +1,266 @@
+---
+title: "Total Brood"
+author: "Guy Mercer"
+date: "21/01/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+# load data
+brood <- read.csv("input/eggs_larvae_pupae.csv")
+
+# change class of variables and short variable names
+brood$batch <- as.factor(brood$batch)
+brood$colony <- as.factor(brood$colony)
+brood$treatment <- as.factor(brood$treatment)
+
+brood$eggs <- brood$number_of_eggs
+brood$larvae <- brood$number_of_larvae
+brood$pupae <- brood$number_of_pupae
+
+brood <- brood [, -c(5, 6, 7)]
+
+brood$eggs <- as.numeric(brood$eggs)
+brood$larvae <- as.numeric(brood$larvae)
+brood$pupae <- as.numeric(brood$pupae)
+brood$total_brood <- as.numeric((brood$total_brood))
+```
+
+Data Exploration
+
+```{r}
+# Cleveland Dot Plot. First make column with 1 and 2 that correspond to Treatment levels
+
+brood$clevelandcode <- factor(
+ifelse(brood$treatment == "control",
+1,
+2))
+
+brood$clevelandcode <- as.numeric(brood$clevelandcode)
+
+# first boxplots of individual stages 
+boxplot(eggs ~ treatment,
+        varwidth = TRUE, xlab = "Treatment",
+        main = "Boxplot of Egg Number Conditional on Treatment", 
+        ylab = "Number of Eggs", data = brood)
+
+boxplot(larvae ~ treatment,
+        varwidth = TRUE, xlab = "Treatment",
+        main = "Boxplot of Larvae Number Conditional on Treatment", 
+        ylab = "Number of Larvae", data = brood)
+
+boxplot(pupae ~ treatment,
+        varwidth = TRUE, xlab = "Treatment",
+        main = "Boxplot of Pupae Number Conditional on Treatment", 
+        ylab = "Number of Pupae", data = brood)
+
+boxplot(pupae ~ treatment,
+        varwidth = TRUE, xlab = "Treatment",
+        main = "Boxplot of Pupae Number Conditional on Treatment", 
+        ylab = "Number of Pupae", data = brood)
+
+# now bloxplot of total brood
+boxplot(total_brood ~ treatment,
+        varwidth = TRUE, xlab = "Treatment",
+        main = "Boxplot of Total Brood Conditional on Treatment", 
+        ylab = "Number of Total Brood", data = brood)
+
+boxplot(total_brood ~ batch,
+        varwidth = TRUE, xlab = "Batch",
+        main = "Boxplot of Total Brood Conditional on Batch", 
+        ylab = "Number of Total Brood", data = brood)
+
+boxplot(total_brood ~ treatment*batch,
+        varwidth = TRUE, xlab = "TreatmentxBatch",
+        main = "Boxplot of Total Brood Conditional on Treatment and Batch", 
+        ylab = "Number of Total Brood", data = brood)
+
+dotchart(brood$total_brood,
+         groups = factor(brood$clevelandcode),
+         ylab = "Order of observations",
+         xlab = "Brood Number", main = "Cleveland dotplot", pch = brood$clevelandcode)
+
+```
+
+No outliers. No treatment effect. Maybe a batch effect. Remember that batch 2 workers coincided with those that were in larval stage (I think) during transportation. 
+
+Start with beyond optimal Poisson GLM, extract residuals and plot against colony. Does this need to be a random effect? Plot residual vs fitted values. Patterns in spread may indicate overdispersion or wrong choice of distribution. 
+
+```{r}
+M1 <- glm(total_brood ~ treatment*batch, family = poisson, data = brood)
+
+summary(M1)
+
+ED <- resid(M1, type = "deviance")
+
+mu <- predict(M1, type = "response")
+
+plot(x = mu, y = ED, main = "Deviance residuals")
+
+boxplot(ED ~ brood$colony, main = "Colony")
+abline(0, 0)
+```
+
+1182.9/54 = 21.9 so overdispersed. Use NB
+
+```{r}
+library(MASS)
+M2 <- glm.nb(total_brood ~ treatment*batch, 
+             link = "log", 
+             data = brood)
+
+summary(M2, cor = FALSE)
+
+ED1 <- resid(M2, type = "deviance")
+
+mu <- predict(M2, type = "response")
+
+plot(x = mu, y = ED1, main = "Deviance residuals")
+
+boxplot(ED1 ~ brood$colony, main = "Colony")
+abline(0, 0)
+```
+
+I can compare NB to Poisson as they are nested. 
+
+```{r}
+llhNB = logLik(M2)
+llhPoisson = logLik(M1)
+d <- 2 * (llhNB - llhPoisson)
+pval <- 0.5 * pchisq(as.numeric(d), df = 1,
+lower.tail = FALSE)
+
+d
+pval
+
+library(lmtest)
+lrtest(M2, M1)
+```
+
+Strong evidence for NB over P. 
+
+Fit NB GLMM with colony as random intercept based on the residual patterns for colony. Compare to NB GLM. Assume REML necessity is still required for finding optimal structure of random component. Therefore, refitted NB with REML and compared M2 to M3. Even if I don't specify REML the conclusion is the same, which is I should include colony as a random effect because it has a weak effect, yet significant effect, on brood size. 
+
+```{r}
+library(glmmTMB)
+
+# refit M2 with glmmTMB
+M2 <- glmmTMB(total_brood ~ treatment * batch,
+              data = brood,
+              family = "nbinom2", 
+              REML = TRUE)
+
+M3 <- glmmTMB(total_brood ~ treatment * batch + (1 | colony),
+              data = brood,
+              family = "nbinom2", 
+              REML = TRUE)
+
+anova(M2,M3)
+
+# not sure why the lrtest isn't outputting the same as pval beneath. Thought as testing on 
+# boundary lrtest should be half of anova for random intercept vs no random intercept?
+lrtest(M2, M3)
+
+llhM3 = logLik(M3)
+llhM2 = logLik(M2)
+d <- 2 * (llhM3 - llhM2)
+pval <- 0.5 * pchisq(as.numeric(d), df = 1,
+lower.tail = FALSE)
+
+d
+pval
+```
+
+I'm not sure if the above lrtest is valid. Should be as the two models are nested apart from the random effects. My issue is the use of REML. Does this still have to be done?
+
+Considering this uncertainty around the validity of the test, purely from looking at the residuals vs colony plot I think colony has to be included as a random effect. 
+
+I think the beneath plot justifies the inclusion of colony as a random effect. 
+
+```{r}
+M3 <- glmmTMB(total_brood ~ treatment * batch + (1 | colony),
+              data = brood,
+              family = "nbinom2", 
+              REML = FALSE)
+
+ED3 <- resid(M3, type = "pearson")
+
+boxplot(ED3 ~ brood$colony, main = "Colony")
+abline(0, 0)
+```
+
+Lets start with my beyond optimal model and perform model selection of the fixed effects.Set REML = FALSE  
+
+```{r}
+M3a <- glmmTMB(total_brood ~ treatment + batch + (1 | colony),
+              data = brood,
+              family = "nbinom2", 
+              REML = FALSE)
+
+anova(M3, M3a)
+
+# treatment:batch not significant. Dropped. M3a now reference
+
+M3b <- glmmTMB(total_brood ~ batch + (1 | colony),
+              data = brood,
+              family = "nbinom2", 
+              REML = FALSE)
+
+anova(M3a, M3b)
+
+M3c <- glmmTMB(total_brood ~ treatment + (1 | colony),
+              data = brood,
+              family = "nbinom2", 
+              REML = FALSE)
+
+anova(M3a, M3c)
+
+# treatment not significant. Dropped. M3b now reference
+M3d <- glmmTMB(total_brood ~ 1 + (1 | colony),
+              data = brood,
+              family = "nbinom2", 
+              REML = FALSE)
+
+anova(M3b, M3d)
+
+# batch significant so optimal model is M3b
+```
+
+So batch is significant. A likelihood ratio test between a model including batch and the intercept and one containing only the intercept yielded a deviance of 12.085 and approximately follows a Chi-square distribution with 2 degree of freedom. Pr(>Chisq) = 0.002376
+
+Treatment was not significant.Pr(>Chisq) = 0.4407, deviance = 0.5945, approximately Chi-square distributed with 1 degree of freedom
+
+```{r}
+# refit with REML = TRUE
+M3b <- glmmTMB(total_brood ~ batch + (1 | colony),
+              data = brood,
+              family = "nbinom2", 
+              REML = TRUE)
+
+summary(M3b)
+```
+
+Variance and standard deviation of colony random effect both apply to it. 0.1701^2 = 0.02894
+
+```{r}
+ED4 <- resid(M3b, type = "pearson")
+
+mu <- predict(M3b, type = "response")
+
+plot(x = mu, y = ED4, main = "Pearson Residuals vs Fitted")
+
+boxplot(ED4 ~ brood$batch, main = "Batch vs Residuals")
+```
+
+So Batch 2 had significantly smaller total brood sizes than the other two batches. Biological meaning is if workers have disrupted development (transportation) during their larval stage, they have lower fitness in comparison to those whose development is disrupted during the late pupal stage, and those whose development is not disrupted at all. 
+
+FPF pure had no effect on total brood size. 
+

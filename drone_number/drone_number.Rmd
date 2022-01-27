@@ -1,0 +1,281 @@
+---
+title: "Drone Number"
+author: "Guy Mercer"
+date: "21/01/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+Import data
+
+```{r}
+drones <- read.csv("input/number_of_drones.csv")
+
+drones$batch <- as.factor(drones$batch)
+drones$colony <- as.factor(drones$colony)
+drones$treatment <- as.factor(drones$treatment)
+
+drones$number_of_drones <- as.numeric(drones$number_of_drones)
+```
+
+Start with a frequency plot 
+
+```{r}
+plot(table(drones$number_of_drones))
+```
+
+Start with zero inflated poisson. Look at residuals vs fitted. Patterns? Compare to zero inflated NB with likelihood ratio test. Select appropriate. Patterns in residuals better? Plot against random effect variable. Move onto ZIGLMM using glmmTMB. Compare zero inflated model to zero inflated mixed model using a likelihood ratio test. Select appropriate. 
+
+At this stage I will have appropriate distribution and random effect structure. Next, perform fixed effect model selection. Complete and check residuals vs fitted and residuals against remaining explanatory variables. All ok? 
+
+```{r}
+boxplot(number_of_drones ~ treatment,
+        varwidth = TRUE, xlab = "Treatment",
+        main = "Boxplot of Drone Number Conditional on Treatment", 
+        ylab = "Number of Drones", data = drones)
+
+drones$clevelandcode <- factor(
+ifelse(drones$treatment == "control",
+1,
+2))
+
+drones$clevelandcode <- as.numeric(drones$clevelandcode)
+
+
+dotchart(drones$number_of_drones,
+         groups = factor(drones$clevelandcode),
+         ylab = "Order of observations",
+         xlab = "Drone Number", main = "Cleveland dotplot", pch = drones$clevelandcode)
+```
+
+No outliers. Heterogeneity looks similar between treatment groups too. 
+
+Fit ZIP. Only have a random intercept as none of my covariates will explain the probability of false zeros. False zeros were equally likely due to the experiment being cut short. Compare to ZINB.
+
+```{r}
+library(glmmTMB)
+
+M1 <- glmmTMB(number_of_drones ~ treatment * batch,
+              data = drones,
+              ziformula=~1,
+              family = poisson)
+
+M2 <- glmmTMB(number_of_drones ~ treatment * batch,
+              data = drones,
+              ziformula=~1,
+              family = "nbinom2",)
+
+anova(M1,M2)
+```
+
+Negative binomial is still overdispersed deviance = 281.8 / df.residuals = 58 = 4.85. A quasi-negative binomial option does not exist. 
+
+Likelihood ratio test shows ZINB is an improvement on the ZIP.
+
+Take a look at the residuals. Refit with pscl as I can extract the residuals from this.
+
+```{r}
+library(pscl)
+
+Zip1 <- zeroinfl(number_of_drones ~ treatment * batch | 1, dist = "poisson",
+                 link = "logit", data = drones)
+
+Zinb1 <- zeroinfl(number_of_drones ~ treatment * batch | 1, dist = "negbin",
+                 link = "logit", data = drones)
+
+library(lmtest)
+lrtest(Zip1,Zinb1)
+
+EP <- residuals(Zinb1, type = "pearson")
+
+mu <- predict(Zinb1, type = "response")
+
+plot(x = mu, y = EP, main = "Pearson Residuals")
+
+boxplot(EP ~ drones$colony, main = "Colony")
+abline(0, 0)
+```
+
+Comparison of anova(M1,M2) and lrtest(Zip1,Zinb1) shows REML = FALSE for glmmTMB default. 
+
+Residuals vs colony shows colony is important so fit as a random effect. 
+
+```{r}
+M3 <- glmmTMB(number_of_drones ~ treatment * batch,
+              data = drones,
+              ziformula=~1,
+              family = "nbinom2",
+              REML = TRUE)
+
+
+M4 <- glmmTMB(number_of_drones ~ treatment * batch + (1 | colony),
+              data = drones,
+              ziformula=~1,
+              family = "nbinom2",
+              REML = TRUE)
+
+# again I don't understand why lrtest isn't performing boundary correction. Divide by 2
+# for random intercept vs no random intercept model. 
+lrtest(M3, M4)
+anova(M3, M4)
+```
+
+Here, if the testing the boundary correction is applicable it will take the p value under 0.05. Still approximate though and very close to threshold. Therefore, don't include colony as a random effect. 
+
+Or perform analysis twice, with colony and without colony and see if there are any differences (doubt it)
+
+```{r}
+# with colony
+M5 <- glmmTMB(number_of_drones ~ treatment * batch + (1 | colony),
+              data = drones,
+              ziformula=~1,
+              family = "nbinom2")
+
+M5a <- glmmTMB(number_of_drones ~ treatment + batch + (1 | colony),
+              data = drones,
+              ziformula=~1,
+              family = "nbinom2")
+
+anova(M5, M5a)
+
+# removed interaction. M5a reference.
+
+# remove batch
+M5b <- glmmTMB(number_of_drones ~ treatment + (1 | colony),
+              data = drones,
+              ziformula=~1,
+              family = "nbinom2")
+
+anova(M5a, M5b)
+
+# remove treatment
+M5c <- glmmTMB(number_of_drones ~ batch + (1 | colony),
+              data = drones,
+              ziformula=~1,
+              family = "nbinom2")
+
+anova(M5a, M5c)
+
+# treatment least significant so remove. M5c reference
+M5d <- glmmTMB(number_of_drones ~ 1 + (1 | colony),
+              data = drones,
+              ziformula=~1,
+              family = "nbinom2")
+
+anova(M5c, M5d)
+
+# batch not significant either. M5d final model. 
+```
+
+```{r}
+summary(M5d)
+```
+
+Let's do it again without colony as a random intercept. 
+
+```{r}
+Zinb1a <- zeroinfl(number_of_drones ~ treatment + batch | 1, dist = "negbin",
+                 link = "logit", data = drones)
+
+lrtest(Zinb1, Zinb1a)
+
+# Zinb1a reference
+Zinb1b <- zeroinfl(number_of_drones ~ treatment | 1, dist = "negbin",
+                 link = "logit", data = drones)
+
+lrtest(Zinb1a, Zinb1b)
+
+Zinb1c <- zeroinfl(number_of_drones ~ batch | 1, dist = "negbin",
+                 link = "logit", data = drones)
+
+lrtest(Zinb1a, Zinb1c)
+
+# Zinb1c reference
+Zinb1d <- zeroinfl(number_of_drones ~ 1 | 1, dist = "negbin",
+                 link = "logit", data = drones)
+
+lrtest(Zinb1c, Zinb1d)
+```
+
+```{r}
+summary(Zinb1d)
+```
+
+Same conclusion that nothing is significant apart from the intercept. For simplicity remove colony as random effect. Model validation
+
+```{r}
+ED1 <- resid(Zinb1d, type = "pearson")
+
+mu <- predict(Zinb1d, type = "response")
+
+plot(x = mu, y = ED1, main = "Deviance residuals")
+
+boxplot(ED1 ~ treatment,
+        varwidth = TRUE, xlab = "Treatment",
+        main = "Residuals vs Treatment", 
+        ylab = "Residuals", data = drones)
+
+boxplot(ED1 ~ batch,
+        varwidth = TRUE, xlab = "Batch",
+        main = "Residuals vs Batch", 
+        ylab = "Residuals", data = drones)
+```
+
+For report, use these figures for batch, treatment and treatment:batch
+
+```{r}
+Zinb1a <- zeroinfl(number_of_drones ~ treatment + batch | 1, dist = "negbin",
+                 link = "logit", data = drones)
+
+lrtest(Zinb1, Zinb1a)
+
+Zinb1b <- zeroinfl(number_of_drones ~ treatment | 1, dist = "negbin",
+                 link = "logit", data = drones)
+
+Zinb1c <- zeroinfl(number_of_drones ~ batch | 1, dist = "negbin",
+                 link = "logit", data = drones)
+
+Zinb1d <- zeroinfl(number_of_drones ~ 1 | 1, dist = "negbin",
+                 link = "logit", data = drones)
+
+lrtest(Zinb1c, Zinb1d)
+
+lrtest(Zinb1b, Zinb1d)
+```
+
+Use this for colony
+
+```{r}
+M3 <- glmmTMB(number_of_drones ~ treatment * batch,
+              data = drones,
+              ziformula=~1,
+              family = "nbinom2",
+              REML = TRUE)
+
+
+M4 <- glmmTMB(number_of_drones ~ treatment * batch + (1 | colony),
+              data = drones,
+              ziformula=~1,
+              family = "nbinom2",
+              REML = TRUE)
+
+# again I don't understand why lrtest isn't performing boundary correction. Divide by 2
+# for random intercept vs no random intercept model. 
+lrtest(M3, M4)
+anova(M3, M4)
+```
+ Refit with REML
+ 
+```{r}
+M3 <- glmmTMB(number_of_drones ~ 1,
+              data = drones,
+              ziformula=~1,
+              family = "nbinom2",
+              REML = TRUE)
+
+summary(M3)
+```
+ 

@@ -1,0 +1,134 @@
+---
+title: "Survival"
+author: "Guy Mercer"
+date: "26/01/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+I used the example dataset "ovarian" in the survival package to set up my data. In a really old (1999) version of the survival package vignette I found the definition of fustat and futime. 
+
+futime: The number of days from enrollment until death or censoring, whichever
+came first.
+
+fustat: An indicator of death (1) or censoring (0).
+
+Therefore my data should have these columns
+
+worker number | microcolony | colony | batch | treatment | survivalday | death
+
+In death column death = 1, censoring = 0
+
+```{r}
+library(survival)
+library(coxme)
+
+# import
+workers <- read.csv("input/worker_survival.csv")
+
+# sort out variable classes
+workers$microcolony <- as.factor(workers$microcolony)
+workers$colony <- as.factor(workers$colony)
+workers$batch <- as.factor(workers$batch)
+workers$treatment <- as.factor(workers$treatment)
+workers$days <- as.numeric(workers$days_survival_post_treatment)
+
+workers <- workers [, -6]
+
+# add censoring column 
+workers$death <- 0
+
+for (i in 1:nrow(workers)) {
+  
+  if (workers$days [i] != 30) {workers$death [i] <- 1}
+  
+}
+```
+
+Begin the analysis
+
+```{r}
+fit1 <- survfit(Surv(days, death) ~ batch + treatment, data=workers)
+
+print(fit1)
+
+summary(fit1, times = (0:30))
+
+plot(fit1, col=1:6, lwd=2, mark.time=TRUE, xlab="Days Since Exposure", ylab="Survival", #conf.int = TRUE
+     )
+
+legend(16, .5, c("batch=1, treatment=control", "batch=1, treatment=fpf-pure", "batch=2, treatment=control",
+                  "batch=2, treatment=fpf-pure", "batch=3, treatment=control", "batch=3, treatment=fpf-pure"),
+       col=1:6, lwd=2, bty='n')
+```
+
+```{r}
+cfit1 <- coxph(Surv(days, death) ~ batch * treatment, data=workers)
+
+cfit2 <- coxme(Surv(days, death) ~ batch * treatment + (1 | colony/microcolony), data=workers)
+
+AIC(cfit1, cfit2)
+
+# slight improvement
+anova(cfit2)
+
+cfit3 <- update(cfit2, .~. - batch:treatment)
+
+anova(cfit2, cfit3)
+
+# interaction term is significant
+# issue is the interaction term is significant due to the differing effects of treatment in batch 2, but not for 
+# other batches. For batch 2 control survival is lower than fpf-pure survival. Also when an interaction term is
+# included the parameter estimates start behaving weirdly. 
+
+summary(cfit2)
+```
+
+```{r}
+# continue with batch+treatment as this has more biological/experimental interpretation and the estimates don't bug out. 
+summary(cfit3)
+
+# significance of batch and treatment is interaction term is omitted
+cfit4 <- update(cfit3, .~. - batch)
+anova(cfit3, cfit4)
+
+cfit5 <- update(cfit3, .~. - treatment)
+anova(cfit3, cfit5)
+```
+
+Batch has an effect. Treatment does not. 
+
+The coefficients in a Cox regression relate to hazard; a positive coefficient indicates a worse prognosis and a negative coefficient indicates a protective effect of the variable with which it is associated.
+
+Model Validation: 
+
+zph() checks for proportionality assumption, by using the Schoenfeld residuals against the transformed time. Having very small p values indicates that there are time dependent coefficients which you need to take care of. That is to say, the proportionality assumption does not check linearity - the Cox PH model is semi parametric and thus makes no assumption as to the form of the hazard. The proportionality assumption is that the hazard rate of an individual is relatively constant in time, and this is what cox.zph() tests.
+
+```{r}
+# proportional hazards
+zp1 <- cox.zph(cfit3)
+zp1
+
+plot(zp1[2], resid=FALSE)
+plot(zp1[1], resid=FALSE)
+```
+
+Proportionality assumption ok. 
+
+```{r}
+library(survminer)
+
+# for prettier graphs
+ggsurvplot(fit1, data = workers, fun='event', conf.int = TRUE) 
+
+# risk.table = TRUE,  risk.table.height = 0.25
+
+# log rank test between KM survival curves.
+surv <- Surv(time = workers$days, event = workers$death)
+survdiff(surv ~ workers$treatment)
+
+```
+

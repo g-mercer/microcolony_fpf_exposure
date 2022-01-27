@@ -10,17 +10,11 @@ knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 ```
 
 ```{r}
-library(tidyverse)
-```
-
-```{r}
 # import csv
-egg_laying_df <- read_csv("input/egg-laying-data.csv", col_names = TRUE)
+egg_laying_df <- read.csv("input/egg-laying-data.csv")
 
-egg_laying_df <- as.data.frame(egg_laying_df)
-
-colnames(egg_laying_df) <- c("microcolony_number", "batch","colony_derived_from", "treatment", "egg_laying_day", 
-                             "day_egg_laying_post_exposure")
+colnames(egg_laying_df) <- c("microcolony", "batch","colony", "treatment", "egg_laying_day", 
+                             "day")
 
 # set variables as factors with appropriate reference levels
 egg_laying_df$treatment <- as.factor(egg_laying_df$treatment)
@@ -29,49 +23,153 @@ egg_laying_df$treatment <- relevel(egg_laying_df$treatment, "control")
 egg_laying_df$batch <- as.factor(egg_laying_df$batch)
 egg_laying_df$batch <- relevel(egg_laying_df$batch, "1")
 
-egg_laying_df$colony_derived_from <- as.factor(egg_laying_df$colony_derived_from)
-egg_laying_df$colony_derived_from <- relevel(egg_laying_df$colony_derived_from, "1")
+egg_laying_df$colony <- as.factor(egg_laying_df$colony)
+egg_laying_df$colony <- relevel(egg_laying_df$colony, "1")
 
-# mean of each level in treatment factor
-means <- tibble()
+egg_laying_df$day <- as.numeric(egg_laying_df$day)
 
-for (i in 1:length(levels(egg_laying_df$treatment))) {
-  
-  treatment_level_mean <- mean(egg_laying_df$day_egg_laying_post_exposure [egg_laying_df$treatment == levels(egg_laying_df$treatment) 
-                                                                           [i]])
-  means [i,1] <- levels(egg_laying_df$treatment) [i]
-  
-  means [i,2] <- treatment_level_mean
-  
-}
+# remove column
+egg_laying_df <- egg_laying_df [, -5]
 
-colnames(means) <- c("Treatment", "Day Of Egg Laying Past Exposure")
+# remove microcolonies that had already laid eggs before exposure began
+egg_laying_df <- egg_laying_df [egg_laying_df$day != 0,]
 
-# Calculate SEs
-for (i in 1:length(levels(egg_laying_df$treatment))) {
-  
-  treatment_level_se <- sd(egg_laying_df$day_egg_laying_post_exposure [egg_laying_df$treatment == levels(egg_laying_df$treatment) [i]]) / 
-                        sqrt(length(egg_laying_df$day_egg_laying_post_exposure [egg_laying_df$treatment == 
-                                                                                levels(egg_laying_df$treatment) [i]]))
-  
-  t1 <- qt(0.975, df = length(egg_laying_df$day_egg_laying_post_exposure [egg_laying_df$treatment == levels(egg_laying_df$treatment) 
-                                                                          [i]]) -1)
-  
-  ci <- treatment_level_se * t1
-  
-  lowerCI <- as.numeric(means [means$Treatment == levels(egg_laying_df$treatment) [i], 2] - ci)
-  
-  means [means$Treatment == levels(egg_laying_df$treatment) [i], 3] <- lowerCI
-  
-  upperCI <- as.numeric(means [means$Treatment == levels(egg_laying_df$treatment) [i], 2] + ci)
-  
-  means [means$Treatment == levels(egg_laying_df$treatment) [i], 4] <- upperCI
-  
-}
+# remove sivanto rows
+egg_laying_df <- egg_laying_df [egg_laying_df$treatment != "sivanto",]
 
-colnames(means) <- c("Treatment", "Day Of Egg Laying Past Exposure", "LowerCI", "UpperCI")
+egg_laying_df$treatment <- factor(egg_laying_df$treatment )
 
-means
+# add event Y/N column
+egg_laying_df$laying_event <- 1
+```
+
+```{r}
+library(survival)
+library(coxme)
+
+fit1 <- survfit(Surv(day, laying_event) ~ batch + treatment, data=egg_laying_df)
+
+print(fit1)
+
+summary(fit1, times = (0:14))
+
+plot(fit1, col=1:6, lwd=2, mark.time=TRUE, xlab="Days Since Exposure", ylab="Egg Laying", #conf.int = TRUE
+    fun='event')
+
+legend(7, .5, c("batch=1, treatment=control", "batch=1, treatment=fpf-pure", "batch=2, treatment=control",
+                  "batch=2, treatment=fpf-pure", "batch=3, treatment=control", "batch=3, treatment=fpf-pure"),
+       col=1:6, lwd=2, bty='n')
+
+# for the sake of visualisation only include treatment
+fit2 <- survfit(Surv(day, laying_event) ~ treatment, data=egg_laying_df)
+
+print(fit2)
+
+summary(fit2, times = (0:14))
+
+plot(fit2, col=1:2, lwd=2, mark.time=TRUE, xlab="Days Since Exposure", ylab="Egg Laying", #conf.int = TRUE
+    fun='event')
+
+legend(7, .5, c("treatment=control", "treatment=fpf-pure"),
+       col=1:2, lwd=2, bty='n')
+```
+
+```{r}
+cfit1 <- coxme(Surv(day, laying_event) ~ batch * treatment + (1 | colony), data=egg_laying_df)
+
+cfit2 <- update(cfit1, .~. - batch:treatment)
+anova(cfit1, cfit2)
+
+cfit3 <- update(cfit2, .~. - batch)
+anova(cfit2, cfit3)
+
+cfit4 <- update(cfit2, .~. - treatment)
+anova(cfit2, cfit4)
+
+summary(cfit2)
+
+# just treatment
+summary(cfit3)
+```
+
+```{r}
+# proportional hazards
+zp1 <- cox.zph(cfit3)
+zp1
+
+# plot(zp1[2])
+plot(zp1[1])
+```
+
+Passes proportionality test. 
+
+Neither batch or treatment had an effect on the hazards ratio for egg laying.  
+
+```{r}
+cfit3 <- coxph(Surv(day, laying_event) ~ treatment, data=egg_laying_df)
+
+plot(survfit(cfit3))
+
+newdat <- with(egg_laying_df, 
+               data.frame(
+                 treatment = c("control", "fpf-pure")
+               )
+)
+
+plot(survfit(cfit3, newdata = newdat), conf.int = TRUE, col = c("red", "blue"), fun='event')
+legend(11, 0.2, 
+       legend=c("control", "treatment"),
+       lty = 1, 
+       col = c("red", "blue"),
+       text.col = c("red", "blue"))
+```
+
+The survival function S(t) is the probability of surviving until at least time t. It is essentially estimated by the number of patients alive at time t divided by the total number of study subjects remaining at that time.
+
+The survival function at the second death time, t(2) is equal to the estimated probability of not dying at time t(2) conditional on the individual being still at risk at time t(2). 
+
+```{r}
+library(survminer)
+
+# for prettier graphs
+ggsurvplot(fit2, data = egg_laying_df, fun='event', conf.int = TRUE) 
+
+# risk.table = TRUE,  risk.table.height = 0.25
+
+# log rank test between KM survival curves.
+surv <- Surv(time = egg_laying_df$day, event = egg_laying_df$laying_event)
+survdiff(surv ~ egg_laying_df$treatment)
 
 ```
-Remember to exclude 0 values as egg laying began before treatment. 
+
+Two sources I used for below info 
+
+[link 1](https://rpubs.com/daspringate/survival)
+[link 2](https://thomaselove.github.io/432-notes/cox-regression-models-for-survival-data-example-1.html)
+
+Hazard Function
+Survival models can be viewed as consisting of two parts: the underlying hazard function, describing how the risk of event per time unit changes over time at baseline levels of covariates; and the effect parameters, describing how the hazard varies in response to explanatory covariates.
+
+h(t|x) = h0(t) exp[B1.x]
+
+h0(t) = is the baseline hazard, which is a non-parametric and unspecified value which depends on t but not on x.
+
+exp[B1.x] = how the baseline hazard is modified as x changes. 
+
+It is a semi-parametric model:
+
+The baseline hazard function is unspecified
+The effects of the covariates are multiplicative (proportional assumption)
+Doesn't make arbitrary assumptions about the shape/form of the baseline hazard function
+
+Proportionality Assumption
+In a proportional hazards model, the unique effect of a unit increase in a covariate is multiplicative with respect to the hazard rate. For example, taking a drug may halve one’s hazard rate for a stroke occurring, or, changing the material from which a manufactured component is constructed may double its hazard rate for failure.
+
+Covariates multiply the hazard by some constant
+e.g. a drug may halve a subjects risk of death at any time
+*The effect is the same at any time point*
+
+Accounting for non-proportional hazards
+Include an interaction with time for the variables:
+This factors time out of the main effect
+Only use if it makes sense to have a linear interaction between the covariate and time (look at the graphs!)
