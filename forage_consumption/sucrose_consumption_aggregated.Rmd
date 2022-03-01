@@ -1,0 +1,520 @@
+---
+title: "sucrose_consumption_aggregated"
+author: "Guy Mercer"
+date: "24/02/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+sucrose <- read.csv("output/sucrose_consumption_corrected_long.csv")
+pollen <- read.csv("output/pollen_consumption_corrected_long.csv")
+```
+
+```{r}
+library(tidyverse)
+
+# x1000 for mg
+sucrose$corrected_consumption <- sucrose$corrected_consumption * 1000
+```
+
+First correct day consumption values for worker number. 
+
+```{r}
+worker_number <- read.csv("input/number_of_workers_each_day.csv")
+
+# convert into long format
+day <- c("1", "2", "4", "6", "8", "10")
+
+worker_long <- tibble()
+
+for (i in 1:length(day)) {
+  
+  worker_temp <- worker_number [, c(1:5, 5+i)]
+  
+  worker_temp$day <- day [i]
+  
+  colnames(worker_temp) [6] <- "worker_number"
+  
+  worker_long <- rbind(worker_long, worker_temp)
+  
+}
+
+# create microcolony_day variable for worker_long and sucrose
+worker_long$mc_day <- paste0(worker_long$microcolony.number, "_", worker_long$day)
+
+sucrose$mc_day <- paste0(sucrose$microcolony_number, "_", sucrose$day)
+
+# associate the worker number with the sucrose dataframe. below says for each row of sucrose df
+# scan each row of the worker_long df. if there is a match between the mc_day unique identifier
+# then put the worker number value for that row of worker_long into the matched row of sucrose df
+sucrose$worker_number <- 0
+
+for (i in 1:nrow(sucrose)) {
+  
+  for (k in 1:nrow(worker_long)) {
+    
+      if (sucrose$mc_day [i] == worker_long$mc_day [k]) {sucrose$worker_number [i] <- worker_long$worker_number [k]}
+    
+  }
+}
+
+# remove mc_day from sucrose
+sucrose <- sucrose [,-7]
+
+# divide corrected consumption values by number of bees present
+sucrose$corrected_consumption <- sucrose$corrected_consumption / sucrose$worker_number
+```
+
+Calculate average total consumption per bee per microcolony. May be more accurate to describe this as total sucrose processed per bee per microcolony.
+
+```{r}
+# sum consumption by MC
+tot_con <- tibble()
+
+microcolony_numbers <- unique(sucrose$microcolony_number)
+
+for (i in 1:length(microcolony_numbers)) {
+  
+  if (length(sucrose$corrected_consumption [sucrose$microcolony_number == microcolony_numbers [i]]) == 6) {
+
+  filtered_con <- cbind(sum(sucrose$corrected_consumption [sucrose$microcolony_number == microcolony_numbers [i]]), microcolony_numbers [i])
+  
+  tot_con <- rbind(tot_con, filtered_con)
+  
+  }
+
+}
+
+# re-associate these MC values with colony, batch etc information
+batch_col_info <- unique(sucrose [, c(1,2,3,4)])
+
+batch_col_info$corrected_consumption <- 0 
+
+for (i in 1:nrow(tot_con)) {
+  
+  for (k in 1:nrow(batch_col_info)) {
+    
+    if (tot_con [i, 2] == batch_col_info [k, 1]) {
+      
+      batch_col_info$corrected_consumption [k] <- tot_con [i, 1] 
+      
+    }
+    
+  }
+  
+}
+
+# remove 0s (these had spills) and rename data
+sucrose <- batch_col_info
+
+sucrose <- sucrose [sucrose$corrected_consumption > 0, ]
+
+```
+
+```{r}
+# sort out the variable classes
+sucrose$microcolony_number <- as.factor(sucrose$microcolony_number)
+sucrose$batch <- as.factor(sucrose$batch)
+sucrose$colony_derived_from <- as.factor(sucrose$colony_derived_from)
+sucrose$treatment <- as.factor(sucrose$treatment)
+```
+
+Now begin analysis. At this point I have corrected the consumption values to account for number of bees present on particular day, summed those values and removed any MCs that didn't have full consumption dataset. 
+
+Bit of exploratory analysis first
+
+```{r}
+# Cleveland Dot Plot. First make column with 1 and 2 that correspond to Treatment levels
+
+sucrose$clevelandcode <- factor(
+ifelse(sucrose$treatment == "control",
+1,
+2))
+
+sucrose$clevelandcode <- as.numeric(sucrose$clevelandcode)
+
+dotchart(sucrose$corrected_consumption,
+         groups = factor(sucrose$clevelandcode),
+         ylab = "Order of observations",
+         xlab = "Consumption (mg)", main = "Cleveland dotplot", pch = sucrose$clevelandcode)
+
+boxplot(corrected_consumption ~ treatment * batch,
+        varwidth = TRUE, xlab = "TreatmentxBatch",
+        main = "Boxplot of Consumption Conditional on Treatment and Batch", 
+        ylab = "Consumption", data = sucrose)
+
+boxplot(corrected_consumption ~ batch,
+        varwidth = TRUE, xlab = "Batch",
+        main = "Boxplot of Consumption Conditional on Batch", 
+        ylab = "Consumption", data = sucrose)
+
+boxplot(corrected_consumption ~ treatment,
+        varwidth = TRUE, xlab = "Treatment",
+        main = "Boxplot of Consumption Conditional on Treatment", 
+        ylab = "Consumption", data = sucrose)
+```
+
+Looks like variance varies by treatment and colony combination. So include this as varIdent term in random structure. Colony is a potential random effect. Let's fit beyond optimal model. 
+
+```{r}
+# beyond optimal model.
+
+# biologically this is my beyond optimal model.
+
+M.lm <- lm(corrected_consumption ~ treatment + batch + treatment:batch, data = sucrose)
+
+summary(M.lm)
+
+# use the residuals from this beyond optimal model
+plot(M.lm, which = c (1))
+```
+
+```{r}
+library(nlme)
+
+M1.gls <- gls(corrected_consumption ~ treatment + batch + treatment:batch, data = sucrose, method = "REML")
+
+E <- resid(M1.gls)
+
+op <- par(mfrow = c(2, 2))
+
+boxplot(E ~ sucrose$treatment, main = "Treatment")
+abline(0, 0)
+
+boxplot(E ~ sucrose$batch, main = "Batch")
+abline(0, 0)
+
+boxplot(E ~ sucrose$treatment * sucrose$batch, main = "Treatment & Batch")
+abline(0, 0)
+
+boxplot(E ~ sucrose$colony_derived_from, main = "Colony")
+abline(0, 0)
+
+par(op)
+
+plot(M1.gls, which = c (1))
+```
+
+Indicates colony should be included as a random effect. Batch seems to be driver of heterogeneity.
+
+```{r}
+# random intercept?
+M1.lme <- lme(corrected_consumption ~ treatment + batch + treatment:batch, data = sucrose, 
+              random = ~1 | colony_derived_from, method = "REML")
+
+AIC(M1.gls, M1.lme)
+
+anova(M1.gls, M1.lme)
+
+library(lmtest)
+lrtest(M1.gls, M1.lme)
+
+# What about the variance structure?
+M1a.gls <- gls(corrected_consumption ~ treatment + batch + treatment:batch,
+               data = sucrose,
+               method = "REML",
+               weights = varIdent(form =~ 1 | treatment*batch))
+
+M1b.gls <- gls(corrected_consumption ~ treatment + batch + treatment:batch,
+               data = sucrose,
+               method = "REML",
+               weights = varIdent(form =~ 1 | batch))
+
+M1c.gls <- gls(corrected_consumption ~ treatment + batch + treatment:batch,
+               data = sucrose,
+               method = "REML",
+               weights = varIdent(form =~ 1 | treatment))
+
+AIC(M1.gls, M1a.gls, M1b.gls, M1c.gls)
+
+anova(M1.gls, M1b.gls)
+
+# no varIdent structure is a significant improvement
+```
+
+Neither colony as a random effect or various variance structures are significant. So my starting model for model selection is M1.gls
+
+```{r}
+M1.gls <- gls(corrected_consumption ~ treatment + batch + treatment:batch, data = sucrose, method = "ML")
+
+# what does AIC say?
+library(MASS)
+stepAIC(M1.gls)
+```
+
+Model: corrected_consumption ~ treatment + batch 
+
+```{r}
+# manual 
+
+# round 1
+M1.gls.a <- update(M1.gls, .~. - treatment:batch)
+
+anova(M1.gls, M1.gls.a)
+
+# round 2 
+M1.gls.b <- update(M1.gls.a, .~. - treatment)
+M1.gls.c <- update(M1.gls.a, .~. - batch)
+
+anova(M1.gls.a, M1.gls.b)
+anova(M1.gls.a, M1.gls.c)
+
+# round 3
+M1.gls.d <- update(M1.gls.b, .~. - batch)
+
+anova(M1.gls.b, M1.gls.d)
+```
+
+Manually only batch has an effect. Refit with REML and look at validation plots. Zuur has a value of 0.04 in one of his examples and states in a series of hypothesis tests it is hardly convincing. Should probably drop batch as well. Page 113 of pdf document and page 297 with example of 0.026. Are the p values from the above approximate? Either way I don't think the result is convincing enough to retain batch. Later on when sorting out heterogeneity in the residuals, once random structures were included, if model selection was performed again batch was not significant. 
+
+```{r}
+# refit with REML
+M1.gls.b <- update(M1.gls.b, method = "REML")
+
+summary(M1.gls.b)
+```
+
+```{r}
+# extract residuals
+E <- resid(M1.gls.b, type = "pearson")
+
+# residuals vs fitted
+plot(M1.gls.b, which = c (1))
+
+op <- par(mfrow = c(2, 2))
+
+boxplot(E ~ sucrose$treatment, main = "Treatment")
+abline(0, 0)
+
+boxplot(E ~ sucrose$batch, main = "Batch")
+abline(0, 0)
+
+boxplot(E ~ sucrose$treatment * sucrose$batch, main = "Treatment & Batch")
+abline(0, 0)
+
+boxplot(E ~ sucrose$colony_derived_from, main = "Colony")
+abline(0, 0)
+
+par(op)
+```
+
+As there are still patterns of heterogeneity for batch and colony. Add random and variance structures to the model and see if they improve the model validation plots. 
+
+```{r}
+# variance structures
+M2a.lme <- lme(corrected_consumption ~ batch,
+               data = sucrose,
+               random =~1 | colony_derived_from, method = "REML",
+               weights = varIdent(form =~ 1 | batch*treatment))
+
+# extract residuals
+E <- resid(M2a.lme, type = "pearson")
+
+# residuals vs fitted
+plot(M2a.lme, which = c (1))
+
+op <- par(mfrow = c(2, 2))
+
+boxplot(E ~ sucrose$treatment, main = "Treatment")
+abline(0, 0)
+
+boxplot(E ~ sucrose$batch, main = "Batch")
+abline(0, 0)
+
+boxplot(E ~ sucrose$treatment * sucrose$batch, main = "Treatment & Batch")
+abline(0, 0)
+
+boxplot(E ~ sucrose$colony_derived_from, main = "Colony")
+abline(0, 0)
+
+par(op)
+```
+
+Heterogeneity looks a lot better if colony is included as random intercept and batch*treatment as a variance structure. 
+
+```{r}
+# manual 
+M3a.lme <- lme(corrected_consumption ~ batch + treatment + treatment:batch,
+               data = sucrose,
+               random =~1 | colony_derived_from, method = "ML",
+               weights = varIdent(form =~ 1 | batch*treatment))
+
+# round 1
+M3a.lme.a <- update(M3a.lme, .~. - treatment:batch)
+
+anova(M3a.lme, M3a.lme.a)
+
+# round 2 
+M3a.lme.b <- update(M3a.lme.a, .~. - treatment)
+M3a.lme.c <- update(M3a.lme.a, .~. - batch)
+
+anova(M3a.lme.a, M3a.lme.b)
+anova(M3a.lme.a, M3a.lme.c)
+
+# round 3
+M3a.lme.d <- update(M3a.lme.b, .~. - batch)
+
+anova(M3a.lme.b, M3a.lme.d)
+```
+
+Above shows that when model selection of fixed effects is rerun with random and variance structures added during graphical model validation step batch ceases to be significant. 
+
+This would leave us with an intercept only model.
+
+```{r}
+# intercept only
+# extract residuals
+E <- resid(M3a.lme.d, type = "pearson")
+
+# residuals vs fitted
+plot(M3a.lme.d, which = c (1))
+
+op <- par(mfrow = c(2, 2))
+
+boxplot(E ~ sucrose$treatment, main = "Treatment")
+abline(0, 0)
+
+boxplot(E ~ sucrose$batch, main = "Batch")
+abline(0, 0)
+
+boxplot(E ~ sucrose$treatment * sucrose$batch, main = "Treatment & Batch")
+abline(0, 0)
+
+boxplot(E ~ sucrose$colony_derived_from, main = "Colony")
+abline(0, 0)
+
+par(op)
+```
+
+When you do this there looks to be more patterns in the residuals. Including batch makes residuals cluster more tightly around 0. Stick with M2a.lme. Including batch removed residual patterns, especially according to batchxtreatment combinations. 
+
+```{r}
+summary(M2a.lme)
+```
+
+```{r}
+# batch 1
+sucrose$batch <- relevel(sucrose$batch, "1")
+
+M2a.lme <- lme(corrected_consumption ~ batch,
+               data = sucrose,
+               random =~1 | colony_derived_from, method = "REML",
+               weights = varIdent(form =~ 1 | batch*treatment))
+
+b1_ci <- intervals(M2a.lme)
+
+# batch 2
+sucrose$batch <- relevel(sucrose$batch, "2")
+
+M2a.lme <- lme(corrected_consumption ~ batch,
+               data = sucrose,
+               random =~1 | colony_derived_from, method = "REML",
+               weights = varIdent(form =~ 1 | batch*treatment))
+
+b2_ci <- intervals(M2a.lme)
+
+# batch 3
+sucrose$batch <- relevel(sucrose$batch, "3")
+
+M2a.lme <- lme(corrected_consumption ~ batch,
+               data = sucrose,
+               random =~1 | colony_derived_from, method = "REML",
+               weights = varIdent(form =~ 1 | batch*treatment))
+
+b3_ci <- intervals(M2a.lme)
+```
+
+```{r}
+# assemble dataframe
+row1 <- c(Batch="1", Prediction = b1_ci [[1]][4], ci_l = b1_ci [[1]][1], ci_h = b1_ci [[1]][7])
+row2 <- c(Batch="2", Prediction = b2_ci [[1]][4], ci_l = b2_ci [[1]][1], ci_h = b2_ci [[1]][7])
+row3 <- c(Batch="3", Prediction = b3_ci [[1]][4], ci_l = b3_ci [[1]][1], ci_h = b3_ci [[1]][7])
+
+predictions <- as.data.frame(rbind(row1, row2, row3))
+
+predictions$Prediction <- as.numeric(as.character(predictions$Prediction))
+predictions$ci_l <- as.numeric(as.character(predictions$ci_l))
+predictions$ci_h <- as.numeric(as.character(predictions$ci_h))
+```
+
+```{r}
+# ggplot
+p1 <- ggplot(data = predictions, aes(x = Batch, y = Prediction, colour = as.factor(Batch))) + 
+  
+  geom_point(position = position_dodge(width = 0.75), size = 3) +
+  
+  geom_errorbar(aes(x = Batch,
+                    ymin = ci_l,
+                    ymax = ci_h,
+                    colour = as.factor(Batch)),
+                position = position_dodge(width = 0.75),
+                width = 0.05, 
+                size = 0.8) +
+  
+  geom_point(data = sucrose,
+             aes(x = batch,
+                 y = corrected_consumption,
+                 colour = as.factor(batch)),
+             alpha = 0.4,
+             position  = position_jitterdodge(),
+             show.legend = FALSE) +
+  
+  theme_bw() +
+
+  labs(y = "Average Sucrose Consumption per Bee per Microcolony", colour = "Batch") +
+    
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    
+  ggtitle("Average Sucrose Consumption") +
+    
+  theme(plot.title = element_text(hjust = 0.5), axis.title.x = element_blank()) +
+  
+  scale_color_manual(values = c("#88CCEE", "#CC6677", "#DDCC77")) 
+
+p1
+
+```
+
+```{r}
+# batch 1
+sucrose$batch <- relevel(sucrose$batch, "1")
+
+M2a.lme <- lme(corrected_consumption ~ batch,
+               data = sucrose,
+               random =~1 | colony_derived_from, method = "REML",
+               weights = varIdent(form =~ 1 | batch*treatment))
+
+summary(M2a.lme)
+```
+
+Now a treatment boxplot. Was dropped from model so no predictions. Just the raw data. Plotted to show visually that there was no effect. 
+
+```{r}
+p <- ggplot(sucrose, aes(x=treatment, y=corrected_consumption, color = treatment)) + 
+  
+  geom_boxplot(outlier.shape=8) +
+
+  geom_point(data = sucrose,
+             aes(x = treatment,
+                 y = corrected_consumption,
+                 colour = as.factor(treatment)),
+             alpha = 0.4,
+             position  = position_jitterdodge(),
+             show.legend = FALSE) +
+  
+  theme_bw() +
+  
+  scale_color_manual(values = c("#117733", "#332288")) +
+  
+  labs(y = "Average Sucrose Consumption / Bee / Microcolony", colour = "Treatment") +
+  
+  ggtitle("Sucrose Consumption") +
+  
+  theme(plot.title = element_text(hjust = 0.5), axis.title.x = element_blank())
+
+p
+```

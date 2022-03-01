@@ -53,6 +53,10 @@ Begin the analysis
 ```{r}
 fit1 <- survfit(Surv(days, death) ~ batch + treatment, data=workers)
 
+fit2 <- survfit(Surv(days, death) ~ batch, data=workers)
+
+fit3 <- survfit(Surv(days, death) ~ treatment, data=workers)
+
 print(fit1)
 
 summary(fit1, times = (0:30))
@@ -91,12 +95,17 @@ summary(cfit2)
 # continue with batch+treatment as this has more biological/experimental interpretation and the estimates don't bug out. 
 summary(cfit3)
 
-# significance of batch and treatment is interaction term is omitted
+# significance of batch and treatment if interaction term is omitted
 cfit4 <- update(cfit3, .~. - batch)
 anova(cfit3, cfit4)
 
 cfit5 <- update(cfit3, .~. - treatment)
 anova(cfit3, cfit5)
+
+# cfit 5 reference
+cfit6 <- update(cfit5, .~. - batch)
+anova(cfit6, cfit5)
+
 ```
 
 Batch has an effect. Treatment does not. 
@@ -121,14 +130,71 @@ Proportionality assumption ok.
 ```{r}
 library(survminer)
 
-# for prettier graphs
-ggsurvplot(fit1, data = workers, fun='event', conf.int = TRUE) 
+# log rank test between KM survival curves.
+# surv <- Surv(time = egg_laying_df$day, event = egg_laying_df$laying_event)
+# survdiff(surv ~ egg_laying_df$treatment)
 
 # risk.table = TRUE,  risk.table.height = 0.25
 
-# log rank test between KM survival curves.
-surv <- Surv(time = workers$days, event = workers$death)
-survdiff(surv ~ workers$treatment)
+# for prettier graphs
+p <- ggsurvplot(fit1,
+                data = workers,
+                conf.int = FALSE,
+                palette = c("#44AA99", "#999933", "#882255", "#661100", "#6699CC", "#888888"),
+                # legend.labs = c("Control", "fpf-pure"),
+                xlab = "Time (days)",
+                ylab = "Probability of Survival",
+                legend = c(0.8, 0.3),
+                legend.title = "")
 
+p1 <- ggsurvplot(fit2,
+                data = workers,
+                conf.int = TRUE,
+                palette = c("#88CCEE", "#CC6677", "#DDCC77"),
+                # legend.labs = c("Control", "fpf-pure"),
+                xlab = "Time (days)",
+                ylab = "Probability of Survival",
+                legend = c(0.8, 0.3),
+                legend.title = "")
+
+p1
+
+p2 <- ggsurvplot(fit3,
+                data = workers,
+                conf.int = TRUE,
+                palette = c("#117733", "#332288"),
+                # legend.labs = c("Control", "fpf-pure"),
+                xlab = "Time (days)",
+                ylab = "Probability of Survival",
+                legend = c(0.8, 0.3),
+                legend.title = "")
+
+p2
+```
+
+```{r}
+cairo_pdf(file = "./survival_plot.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+p
+
+ dev.off()
+ 
+ cairo_pdf(file = "./survival_batch_plot.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+p1
+
+ dev.off()
+ 
+ cairo_pdf(file = "./survival_treatment_plot.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+p2
+
+ dev.off()
 ```
 

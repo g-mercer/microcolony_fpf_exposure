@@ -1,0 +1,161 @@
+---
+title: "Total Dose"
+author: "Guy Mercer"
+date: "07/02/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+sucrose <- read.csv("input/sucrose_consumption_corrected_long.csv")
+pollen <- read.csv("input/pollen_consumption_corrected_long.csv")
+
+sucrose$day <- as.numeric(as.character(sucrose$day))
+```
+
+sucrose 
+[1] 866.2034 day 1
+[1] 514.0244 day 2 
+[1] 243.537 day 4
+[1] 89.95134 day 6
+[1] 33.22388 day 8 
+[1] 12.27137 day 10
+
+pollen
+[1] 19187.14 day 1
+[1] 5033.175 day 2
+[1] 689.9583 day 4,6,8,10
+
+Divide recorded value (g) by 1000 to get kg. Multiply recorded value by day concentration (µg/kg) to get µg of FPF consumed. 
+
+```{r}
+# only fpf MCs
+sucrose <- sucrose [sucrose$treatment == "fpf-pure", ]
+
+sucrose$corrected_consumption <- sucrose$corrected_consumption/1000
+
+sucrose$mass_consumed <- 0
+
+for (i in 1:nrow(sucrose)) {
+  
+  if (sucrose$day [i] == 1) {sucrose$mass_consumed [i] <- sucrose$corrected_consumption [i] * 866.2034}
+  
+    if (sucrose$day [i] == 2) {sucrose$mass_consumed [i] <- sucrose$corrected_consumption [i] * 514.0244}
+  
+        if (sucrose$day [i] == 4) {sucrose$mass_consumed [i] <- sucrose$corrected_consumption [i] * 243.537}
+  
+          if (sucrose$day [i] == 6) {sucrose$mass_consumed [i] <- sucrose$corrected_consumption [i] * 89.95134}
+  
+            if (sucrose$day [i] == 8) {sucrose$mass_consumed [i] <- sucrose$corrected_consumption [i] * 33.22388}
+  
+              if (sucrose$day [i] == 10) {sucrose$mass_consumed [i] <- sucrose$corrected_consumption [i] * 12.27137}
+}
+
+mass_fpf_microcolony <- c()
+
+microcolony_numbers <- unique(sucrose$microcolony_number)
+
+for (i in 1:length(microcolony_numbers)) {
+  
+  mass_fpf_microcolony [i] <- sum(sucrose$mass_consumed [sucrose$microcolony_number == microcolony_numbers [i]])
+
+}
+```
+
+```{r}
+# large variation due to spillages. Only use microcolonies where no spillages occurred. 
+library(tidyverse)
+
+mass_fpf_microcolony_filtered <- tibble()
+
+for (i in 1:length(microcolony_numbers)) {
+  
+  if (length(sucrose$mass_consumed [sucrose$microcolony_number == microcolony_numbers [i]]) == 6) 
+    
+  {
+    
+    filtered_mass <- cbind(sum(sucrose$mass_consumed [sucrose$microcolony_number == microcolony_numbers [i]]), microcolony_numbers [i])
+    
+    mass_fpf_microcolony_filtered <- rbind(mass_fpf_microcolony_filtered, filtered_mass)
+    
+    
+    }
+
+}
+
+mean_dose <- mean(mass_fpf_microcolony_filtered [, 1])
+
+std_mean <- function(x) sd(x)/sqrt(length(x))
+
+standard_error_dose <- std_mean(mass_fpf_microcolony_filtered [,1])
+
+# per microcolony
+mean_dose
+
+standard_error_dose
+
+```
+
+```{r}
+# for pollen
+# only fpf MCs
+pollen <- pollen [pollen$treatment == "fpf-pure", ]
+
+pollen$corrected_consumption <- pollen$corrected_consumption/1000
+
+pollen$mass_consumed <- 0
+
+for (i in 1:nrow(pollen)) {
+  
+  if (pollen$day [i] == 1) {pollen$mass_consumed [i] <- pollen$corrected_consumption [i] * 19187.14}
+  
+    if (pollen$day [i] == 2) {pollen$mass_consumed [i] <- pollen$corrected_consumption [i] * 5033.175}
+  
+        if (pollen$day [i] == 4) {pollen$mass_consumed [i] <- pollen$corrected_consumption [i] * 689.9583}
+  
+          if (pollen$day [i] == 6) {pollen$mass_consumed [i] <- pollen$corrected_consumption [i] * 689.9583}
+  
+            if (pollen$day [i] == 8) {pollen$mass_consumed [i] <- pollen$corrected_consumption [i] * 689.9583}
+  
+              if (pollen$day [i] == 10) {pollen$mass_consumed [i] <- pollen$corrected_consumption [i] * 689.9583}
+}
+
+microcolony_numbers <- unique(pollen$microcolony_number)
+```
+
+```{r}
+mass_fpf_microcolony_filtered_pollen <- tibble()
+
+for (i in 1:length(microcolony_numbers)) {
+  
+  if (length(pollen$mass_consumed [pollen$microcolony_number == microcolony_numbers [i]]) == 6) 
+    
+  {
+    
+    filtered_mass_pollen <- cbind(sum(pollen$mass_consumed [pollen$microcolony_number == microcolony_numbers [i]]), microcolony_numbers [i])
+    
+    mass_fpf_microcolony_filtered_pollen <- rbind(mass_fpf_microcolony_filtered_pollen, filtered_mass_pollen)
+    
+    }
+
+}
+
+mean_dose_pollen <- mean(mass_fpf_microcolony_filtered_pollen [, 1])
+
+standard_error_dose_pollen <- std_mean(mass_fpf_microcolony_filtered_pollen [,1])
+
+# per microcolony
+mean_dose_pollen
+
+standard_error_dose_pollen 
+```
+
+LD50 is 67.9µg/bee. (5.5+4.86/4)/67.9 * 100 = 3.81% of LD50
+
+```{r}
+(mean_dose + mean_dose_pollen) / 4 / 67.9 * 100 
+```
+

@@ -86,8 +86,6 @@ anova(cfit2, cfit3)
 cfit4 <- update(cfit2, .~. - treatment)
 anova(cfit2, cfit4)
 
-summary(cfit2)
-
 # just treatment
 summary(cfit3)
 ```
@@ -106,22 +104,22 @@ Passes proportionality test.
 Neither batch or treatment had an effect on the hazards ratio for egg laying.  
 
 ```{r}
-cfit3 <- coxph(Surv(day, laying_event) ~ treatment, data=egg_laying_df)
+# cfit3 <- coxph(Surv(day, laying_event) ~ treatment, data=egg_laying_df)
 
-plot(survfit(cfit3))
+# plot(survfit(cfit3))
 
-newdat <- with(egg_laying_df, 
-               data.frame(
-                 treatment = c("control", "fpf-pure")
-               )
-)
+# newdat <- with(egg_laying_df, 
+#                data.frame(
+#                  treatment = c("control", "fpf-pure")
+#                )
+# )
 
-plot(survfit(cfit3, newdata = newdat), conf.int = TRUE, col = c("red", "blue"), fun='event')
-legend(11, 0.2, 
-       legend=c("control", "treatment"),
-       lty = 1, 
-       col = c("red", "blue"),
-       text.col = c("red", "blue"))
+# plot(survfit(cfit3, newdata = newdat), conf.int = TRUE, col = c("red", "blue"), fun='event')
+# legend(11, 0.2, 
+#        legend=c("control", "treatment"),
+#        lty = 1, 
+#        col = c("red", "blue"),
+#        text.col = c("red", "blue"))
 ```
 
 The survival function S(t) is the probability of surviving until at least time t. It is essentially estimated by the number of patients alive at time t divided by the total number of study subjects remaining at that time.
@@ -131,16 +129,41 @@ The survival function at the second death time, t(2) is equal to the estimated p
 ```{r}
 library(survminer)
 
-# for prettier graphs
-ggsurvplot(fit2, data = egg_laying_df, fun='event', conf.int = TRUE) 
-
-# risk.table = TRUE,  risk.table.height = 0.25
-
 # log rank test between KM survival curves.
 surv <- Surv(time = egg_laying_df$day, event = egg_laying_df$laying_event)
 survdiff(surv ~ egg_laying_df$treatment)
 
+# risk.table = TRUE,  risk.table.height = 0.25
+
+# for prettier graphs
+p <- ggsurvplot(fit2,
+                data = egg_laying_df,
+                fun='event',
+                conf.int = TRUE,
+                palette = c("#117733", "#332288"),
+                legend.labs = c("Control", "fpf-pure"),
+                xlab = "Time (days)",
+                ylab = "Probability of Egg Laying",
+                legend = c(0.9, 0.5),
+                legend.title = "")
+
+p
+
+# plot$plot +   scale_color_manual(values = c("#117733", "#332288")) 
+
+
 ```
+
+```{r}
+cairo_pdf(file = "./egg_laying_plot.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+p
+
+ dev.off()
+```
+
 
 Two sources I used for below info 
 

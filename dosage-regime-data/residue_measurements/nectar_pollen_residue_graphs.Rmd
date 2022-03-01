@@ -132,7 +132,7 @@ plot_function_1 <- function(x, y, z) {
     
           theme(axis.title = element_text(size = 8)) +
     
-          geom_hline(aes(yintercept = median(residue_measurement_ugkg)), color= y) +
+          geom_hline(aes(yintercept = mean(pollen$residue_measurement_ugkg [pollen$DALA_h > 1])), color= y) +
     
           theme(legend.title = element_blank()) +
     
@@ -142,9 +142,19 @@ plot_function_1 <- function(x, y, z) {
   
 }
 
-pollen_day_3_plot_median <- plot_function_1(pollen_day_3, "#1AFF1A", theme(axis.title.x = element_blank()))
+pollen_day_3_plot_median <- plot_function_1(pollen_day_3, "#1A85FF", theme(axis.title.x = element_blank()))
 
 nectar_day_2_plot_median <- plot_function_1(nectar_day_2, "#4B0092", theme() )
+
+pollen_day_3_plot_median
+
+cairo_pdf(file = "./pollen_day_3.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+pollen_day_3_plot_median
+
+ dev.off()
 ```
 
 ```{r}

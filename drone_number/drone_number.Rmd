@@ -279,3 +279,120 @@ M3 <- glmmTMB(number_of_drones ~ 1,
 summary(M3)
 ```
  
+ Add treatment back in as that is what we are interested in. Want to show its lack of effect. 
+ 
+```{r}
+drones$treatment <- relevel(drones$treatment, "control")
+M4 <- glmmTMB(number_of_drones ~ 1 + treatment,
+              data = drones,
+              ziformula=~1,
+              family = "nbinom2",
+              REML = TRUE)
+
+summary(M4)
+
+# control ci
+con_ci <- confint(M4)
+
+# fpf ci
+drones$treatment <- relevel(drones$treatment, "fpf-pure")
+
+M4 <- glmmTMB(number_of_drones ~ 1 + treatment,
+              data = drones,
+              ziformula=~1,
+              family = "nbinom2",
+              REML = TRUE)
+
+fpf_ci <- confint(M4)
+
+# assemble dataframe
+row1 <- c(treatment="control", Prediction = exp(con_ci [1,3]), ci_l = exp(con_ci [1,1]), ci_h = exp(con_ci [1,2]))
+
+
+row2 <- c(treatment="fpf-pure", Prediction = exp(fpf_ci [1,3]), ci_l = exp(fpf_ci [1,1]), ci_h = exp(fpf_ci [1,2]))
+
+predictions <- as.data.frame(rbind(row1, row2))
+
+predictions$Prediction <- as.numeric(as.character(predictions$Prediction))
+predictions$ci_l <- as.numeric(as.character(predictions$ci_l))
+predictions$ci_h <- as.numeric(as.character(predictions$ci_h))
+```
+ 
+```{r}
+library(tidyverse)
+
+# ggplot
+p1 <- ggplot(data = predictions, aes(x = treatment, y = Prediction, colour = as.factor(treatment))) + 
+  
+  geom_point(position = position_dodge(width = 0.75), size = 3) +
+  
+  geom_errorbar(aes(x = treatment,
+                    ymin = ci_l,
+                    ymax = ci_h,
+                    colour = as.factor(treatment)),
+                position = position_dodge(width = 0.75),
+                width = 0.05, 
+                size = 0.8) +
+  
+  geom_point(data = drones,
+             aes(x = treatment,
+                 y = number_of_drones,
+                 colour = as.factor(treatment)),
+             alpha = 0.4,
+             position  = position_jitterdodge(),
+             show.legend = FALSE) +
+  
+  theme_bw() +
+
+  labs(y = "Number of Drones", colour = "Treatment") +
+    
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    
+  ggtitle("Drone Number") +
+    
+  theme(plot.title = element_text(hjust = 0.5), axis.title.x = element_blank()) +
+  
+  scale_color_manual(values = c("#117733", "#332288")) 
+
+p1
+```
+
+```{r}
+cairo_pdf(file = "./treatment_boxplot.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+p1
+
+ dev.off()
+```
+
+
+Report the probability of false zeros is exp(-0.699220735) / 1 + exp(-0.699220735). This is 0.33. 
+
+Probabilities have to add to 1. The full range of outcomes is false zero, true zero and count. 
+
+The probability that (yi = 0) = P(false zero) + (1-P(false zero) x P(true zero))
+
+Let's unpack this. Probability of 0 is equal to the probability of a false zero plus the probability of an observation not being a false zero (everything else) multiplied by the probability of a true zero. 
+
+Probability that (yi > 0) = 1-P(false zero) x P(true count)
+
+so P(yi = 0) + P(yi > 0) = 1
+
+So for my data above where the mean for both groups is approximately 6. The probability of a 0 from a poisson with a mean of 6 is equal to e^-6, which is 0.25%. Therefore, the probability of a zero = 0.33 + (1-0.33)x0.0025 = 0.3317. 
+
+So if I calculate the probability of a false zero in terms of just the zeros  = 0.33/0.3317 = 0.995. 
+
+So basically all my zeros are false zeros. 
+
+The probability of false zeros therefore isn't showing the probability of a false zero in terms of just zeros, but in terms of of the whole data. 
+
+Therefore, if the mean of a poisson is 6 and my P(false zero) = 0.33, P(true zero) = (1-0.33)xe^-6) = 0.0017, P(yi > 0) = (1-0.33)xPr(Count Process)
+
+Pr(Count Process) = 1 - e^-6 = 0.9975 x (1-0.33) = 0.6683
+
+Pr(total) = 0.33 + 0.0017 + 0.6683 = 1
+
+
+Take home is the probability of false zeros is in terms of total probability, not only conditional on zero. 

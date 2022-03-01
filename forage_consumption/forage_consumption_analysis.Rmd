@@ -91,12 +91,13 @@ Certainly an increase in variance with day. Potentially a batch*treatment (overa
 
 Not interested in the effect of microcolony so should include this as a random effect. How to structure it? Compound symmetry where correlation for all observations within microcolony is the same or auto-regressive (or something else as unequal spacings) where correlation between observations depends on time gap between them? 
 
-Can't fit a smoother as not enough time (day) points. Back to the old quadratic. Centre the quadratic to reduce the collinearity. This causes an apparent discrepancy between the summary output and graphs until you think about it. When day = 0 the cday2 term = 0-37.21186xparameter estimate. 
+Can't fit a cubic regression spline smoother as not enough time (day) points. Back to the old quadratic. Centre the quadratic to reduce the collinearity. This causes an apparent discrepancy between the summary output and graphs until you think about it. When day = 0 the cday2 term = 0-37.21186xparameter estimate. 
 
 ```{r}
 # beyond optimal model.
 
-# biologically this is my beyond optimal model. I can imagine both treatment and batch potentially affecting the # starting (intercept) consumption and the relationship between consumption and day. 
+# biologically this is my beyond optimal model. I can imagine both treatment and batch potentially affecting the 
+# starting (intercept) consumption and the relationship between consumption and day. 
 
 # centre day squared
 sucrose$cday2 <- sucrose$day^2 - mean(sucrose$day^2)
@@ -137,7 +138,7 @@ abline(0, 0)
 
 par(op)
 
-plot(E ~ sucrose$day, main = "Microcolony")
+plot(E ~ sucrose$day, main = "Day")
 abline(0, 0)
 ```
 
@@ -243,7 +244,7 @@ plot(E.M2c.lme ~ sucrose$day, main = "Microcolony")
 abline(0, 0)
 
 # heterogeneity now dealt with but still pattern in the plot. Common reason for pattern in plots is missing terms in model or poor model fit
-# ie it's not linear/ not quadratic. Try and rule out missing terms in model being the cause. 
+# ie it's not linear/not quadratic. Try and rule out missing terms in model being the cause. 
 M2c.lme.all.int <- lme(corrected_consumption ~ day*cday2*treatment*batch,
                        data = sucrose, random =~1 + day + cday2 | microcolony_number,
                        method = "REML", control = lmeControl(opt = 'optim'),
@@ -266,7 +267,7 @@ abline(0, 0)
 # quick summary of model with optimal random effects structure
 summary(M2c.lme)
 ```
-The intercept is highly negatively correlated with day. So if the slope of day increases the intercept decreases. A trick to counteract this is to centre the day. Then again, I am not really interested in the intercept of factors but their interaction with day. Was consumption different over the course of the experiment, not at day 0 where consumption was unspiked sucrose. Also, centring the quadratic term didn't seem to do much. 
+The intercept is highly negatively correlated with day. So if the slope of day increases the intercept decreases. A trick to counteract this is to centre the day. Then again, I am not really interested in the intercept of factors but their interaction with day. Was consumption different over the course of the experiment, not at day 0 where consumption was unspiked sucrose. Also, centering the quadratic term didn't seem to do much. 
 
 ```{r}
 # set method to ML
@@ -290,7 +291,6 @@ M2.lme.aic.a <- update(M2.lme.aic, .~. - batch:day)
 
 anova(M2.lme.aic, M2.lme.aic.a )
 ```
-
 
 ```{r}
 M2c.lme <- lme(corrected_consumption ~ day + cday2 + treatment + batch + treatment:batch + treatment:day + 
@@ -370,6 +370,7 @@ E.M2c.lme.r <- resid(M2c.lme.r, type = "pearson")
 # residuals vs fitted
 plot(M2c.lme.r, which = c (1))
 
+# residuals vs day
 xyplot(E.M2c.lme.r ~ day, data = sucrose,
        xlab = "Day", ylab = "Pearson Residuals",
        panel=function(x, y){
@@ -447,54 +448,90 @@ plot(x = sucrose$day [sucrose$batch == 3], y = sucrose$corrected_consumption [su
 lines(mydata$day, line_list [[3]])
 ```
 
+[using predict in ggplot](https://aosmith.rbind.io/2018/11/16/plot-fitted-lines/#extracting-predicted-values-with-predict)
+
+[limitations of confidence intervals with lme](https://bbolker.github.io/mixedmodels-misc/glmmFAQ.html#is-the-likelihood-ratio-test-reliable-for-mixed-models)
+
 ```{r}
-# plotting chunk
-# predict values
-consumption <- predict(M.lm, value = "response")
+library(tidyverse)
+# confidence intervals. This method has its drawbacks though.
+# Note that none of the following approaches takes the uncertainty of the random effects parameters into account
+# If you want to take RE parameter uncertainty into account, a Bayesian approach is probably the easiest way to do it.
+library(bernr)
 
-# generate line components
-dayvalues <- seq(1, 10, 0.1)
+# b1
+b1_ci_l <- bolker_ci(M2c.lme.r, data_list [[1]], pred_int = FALSE, conf_level = 0.95) [6]
+b1_ci_h <- bolker_ci(M2c.lme.r, data_list [[1]], pred_int = FALSE, conf_level = 0.95) [7]
 
-data_list <- list()
+# b2
+b2_ci_l <- bolker_ci(M2c.lme.r, data_list [[2]], pred_int = FALSE, conf_level = 0.95) [6]
+b2_ci_h <- bolker_ci(M2c.lme.r, data_list [[2]], pred_int = FALSE, conf_level = 0.95) [7]
 
-for (i in 1:length(unique(sucrose$batch))) {
-  mydata <- data.frame(
-    day = dayvalues,
-    cday2 = dayvalues^2-mean(sucrose$day^2),
-    batch = unique(sucrose$batch) [i],
-    treatment = "control"  )
+# b3
+b3_ci_l <- bolker_ci(M2c.lme.r, data_list [[3]], pred_int = FALSE, conf_level = 0.95) [6]
+b3_ci_h <- bolker_ci(M2c.lme.r, data_list [[3]], pred_int = FALSE, conf_level = 0.95) [7]
+
+
+# collect all required input into dataframes
+b1_df <- cbind(data_list [[1]], line_list [[1]], b1_ci_l, b1_ci_h )
+colnames(b1_df) [4] <- "corrected_consumption"
   
-  data_list [[i]] <- mydata
-}
+b2_df <- cbind(data_list [[2]], line_list [[2]], b2_ci_l, b2_ci_h )
+colnames(b2_df) [4] <- "corrected_consumption"
 
-for (i in 1:length(unique(sucrose$batch))) {
-  mydata <- data.frame(
-    day = dayvalues,
-    cday2 = dayvalues^2-mean(sucrose$day^2),
-    batch = unique(sucrose$batch) [i],
-    treatment = "fpf-pure"  )
+b3_df <- cbind(data_list [[3]], line_list [[3]], b3_ci_l, b3_ci_h )
+colnames(b3_df) [4] <- "corrected_consumption"
+
+p1 <- ggplot(sucrose, aes(x = day, y = corrected_consumption, colour = as.factor(batch))) + 
   
-  data_list [[i+3]] <- mydata
-}
-
-line_list <- list()
-
-for (i in 1:6) {
+  geom_point(data = sucrose,
+             aes(x = day,
+                 y = corrected_consumption,
+                 colour = as.factor(batch)),
+             alpha = 0.25,
+             position  = position_dodge(width = 0.75),
+             show.legend = FALSE) +
   
-  line <- predict(M.lm, data_list [[i]], type = "response")
+  theme_bw() +
   
-  line_list [[i]] <- line
+  geom_line(data = b1_df, aes(y = b1_df$corrected_consumption), size = 1) +
   
-}
+  geom_ribbon(data = b1_df, aes(ymin=b1_df$ci_l, ymax=b1_df$ci_h, fill = batch, color = NULL), alpha=0.2, show.legend = FALSE) +
+  
+  scale_fill_manual(values = c("#88CCEE", "#CC6677", "#DDCC77")) +
 
-plot(x = sucrose$day, y = consumption, main = "Fitted Values", xlim = c(0,10), ylim = c(0,6))
+  geom_line(data = b2_df, aes(y = b2_df$corrected_consumption), size = 1) +
+  
+  geom_ribbon(data = b2_df, aes(ymin=b2_df$ci_l, ymax=b2_df$ci_h, fill = batch, color = NULL), alpha=0.2, show.legend = FALSE) +
 
- for (i in 1:6) {
-       
-            lines(mydata$day, line_list [[i]])
-     }
+  geom_line(data = b3_df, aes(y = b3_df$corrected_consumption), size = 1) +
+  
+  geom_ribbon(data = b3_df, aes(ymin=b3_df$ci_l, ymax=b3_df$ci_h, fill = batch, color = NULL), alpha=0.2, show.legend = FALSE) +
 
+  labs(y = "Sucrose Consumption", colour = "Batch") +
+  
+  ggtitle("Sucrose Consumption During Exposure Window") +
+    
+  theme(plot.title = element_text(hjust = 0.5)) +
+  
+  scale_color_manual(values = c("#88CCEE", "#CC6677", "#DDCC77")) +
+  
+  scale_x_continuous(breaks=seq(0,10,1)) +
+  
+  theme(legend.key = element_blank())
 ```
+
+```{r}
+cairo_pdf(file = "./sucrose_consumption.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+p1
+
+ dev.off()
+```
+
+Below can be ignored apart for the sake of interest. 
 
 ```{r}
 # what polynomial do I have to go to before these residual patterns start to dissipate?

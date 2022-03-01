@@ -1,0 +1,680 @@
+---
+title: "sucrose consumption analysis"
+author: "Guy Mercer"
+date: "15/02/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+# import curated data
+sucrose <- read.csv(file = "output/sucrose_consumption_corrected_long.csv", )
+
+pollen <- read.csv(file = "output/pollen_consumption_corrected_long.csv")
+```
+
+Start with sucrose. Visualisations.
+
+```{r}
+library(lattice)
+
+# sort out the variable classes
+sucrose$microcolony_number <- as.factor(sucrose$microcolony_number)
+sucrose$batch <- as.factor(sucrose$batch)
+sucrose$colony_derived_from <- as.factor(sucrose$colony_derived_from)
+sucrose$day <- as.numeric(sucrose$day)
+
+# divide days 4,6,8 and 10 by 2 as they represent consumption over two days
+
+for (i in 1:nrow(sucrose)) {
+  
+  if (sucrose$day [i] == 4) {sucrose$corrected_consumption [i] <- sucrose$corrected_consumption [i] / 2}
+  
+  if (sucrose$day [i] == 6) {sucrose$corrected_consumption [i] <- sucrose$corrected_consumption [i] / 2}
+  
+  if (sucrose$day [i] == 8) {sucrose$corrected_consumption [i] <- sucrose$corrected_consumption [i] / 2}
+
+  if (sucrose$day [i] == 10) {sucrose$corrected_consumption [i] <- sucrose$corrected_consumption [i] / 2}
+
+
+}
+
+# x1000 for mg
+sucrose$corrected_consumption <- sucrose$corrected_consumption * 1000
+```
+
+Express in consumption per bee. Shouldn't make much difference as only small number of deaths at the beginning of the experiment.
+
+```{r}
+worker_number <- read.csv("input/number_of_workers_each_day.csv")
+
+# convert into long format
+day <- c("1", "2", "4", "6", "8", "10")
+
+worker_long <- tibble()
+
+for (i in 1:length(day)) {
+  
+  worker_temp <- worker_number [, c(1:5, 5+i)]
+  
+  worker_temp$day <- day [i]
+  
+  colnames(worker_temp) [6] <- "worker_number"
+  
+  worker_long <- rbind(worker_long, worker_temp)
+  
+}
+
+# create microcolony_day variable for worker_long and sucrose
+worker_long$mc_day <- paste0(worker_long$microcolony.number, "_", worker_long$day)
+
+sucrose$mc_day <- paste0(sucrose$microcolony_number, "_", sucrose$day)
+
+
+# associate the worker number with the sucrose dataframe. below says for each row of sucrose df
+# scan each row of the worker_long df. if there is a match between the mc_day unique identifier
+# then put the worker number value for that row of worker_long into the matched row of sucrose df
+sucrose$worker_number <- 0
+
+for (i in 1:nrow(sucrose)) {
+  
+  for (k in 1:nrow(worker_long)) {
+    
+      if (sucrose$mc_day [i] == worker_long$mc_day [k]) {sucrose$worker_number [i] <- worker_long$worker_number [k]}
+    
+  }
+}
+
+# remove mc_day from sucrose
+sucrose <- sucrose [,-7]
+
+# divide corrected consumption values by number of bees present
+sucrose$corrected_consumption <- sucrose$corrected_consumption / sucrose$worker_number
+```
+
+Bit of exploratory analysis first
+
+```{r}
+# Cleveland Dot Plot. First make column with 1 and 2 that correspond to Treatment levels
+
+sucrose$clevelandcode <- factor(
+ifelse(sucrose$treatment == "control",
+1,
+2))
+
+sucrose$clevelandcode <- as.numeric(sucrose$clevelandcode)
+
+dotchart(sucrose$corrected_consumption,
+         groups = factor(sucrose$clevelandcode),
+         ylab = "Order of observations",
+         xlab = "Consumption (mg)", main = "Cleveland dotplot", pch = sucrose$clevelandcode)
+
+boxplot(corrected_consumption ~ treatment * batch,
+        varwidth = TRUE, xlab = "Treatment",
+        main = "Boxplot of Consumption Conditional on Treatment and Batch", 
+        ylab = "Consumption", data = sucrose)
+
+boxplot(corrected_consumption ~ batch,
+        varwidth = TRUE, xlab = "Treatment",
+        main = "Boxplot of Consumption Conditional on Batch", 
+        ylab = "Consumption", data = sucrose)
+
+boxplot(corrected_consumption ~ treatment,
+        varwidth = TRUE, xlab = "Treatment",
+        main = "Boxplot of Consumption Conditional on Treatment", 
+        ylab = "Consumption", data = sucrose)
+```
+
+Four control values that are substantially higher than the rest. 
+
+```{r}
+# have a look at the consumption
+xyplot(corrected_consumption ~ day, data = sucrose,
+       xlab = "Day", ylab = "Sucrose Consumption",
+       panel=function(x, y){
+         panel.xyplot(x, y, col = 1, cex = 0.5, pch = 1)
+         panel.grid(h = -1, v = 2)
+         panel.abline(v = 0, lty = 2)
+         if (length(x) > 5) panel.loess(x, y, span = 0.6,
+                                        col = 1, lwd = 2)
+         })
+
+# have a look at the consumption for every microcolony. 
+xyplot(corrected_consumption ~ day | microcolony_number, data = sucrose,
+       xlab = "Day", ylab = "Sucrose Consumption",
+       panel=function(x, y){
+         panel.xyplot(x, y, col = 1, cex = 0.5, pch = 1)
+         panel.grid(h = -1, v = 2)
+         panel.abline(v = 0, lty = 2)
+         if (length(x) > 5) panel.loess(x, y, span = 0.85,
+                                        col = 1, lwd = 2)
+         })
+
+# have a look at the consumption by treatment
+xyplot(corrected_consumption ~ day | treatment, data = sucrose,
+       xlab = "Day", ylab = "Sucrose Consumption",
+       panel=function(x, y){
+         panel.xyplot(x, y, col = 1, cex = 0.5, pch = 1)
+         panel.grid(h = -1, v = 2)
+         panel.abline(v = 0, lty = 2)
+         if (length(x) > 5) panel.loess(x, y, span = 0.6,
+                                        col = 1, lwd = 2)
+         })
+
+# have a look at the consumption by batch
+xyplot(corrected_consumption ~ day | batch, data = sucrose,
+       xlab = "Day", ylab = "Sucrose Consumption",
+       panel=function(x, y){
+         panel.xyplot(x, y, col = 1, cex = 0.5, pch = 1)
+         panel.grid(h = -1, v = 2)
+         panel.abline(v = 0, lty = 2)
+         if (length(x) > 5) panel.loess(x, y, span = 0.6,
+                                        col = 1, lwd = 2)
+         })
+
+# have a look at the consumption by treatment*batch
+xyplot(corrected_consumption ~ day | batch*treatment, data = sucrose,
+       xlab = "Day", ylab = "Sucrose Consumption",
+       panel=function(x, y){
+         panel.xyplot(x, y, col = 1, cex = 0.5, pch = 1)
+         panel.grid(h = -1, v = 2)
+         panel.abline(v = 0, lty = 2)
+         if (length(x) > 5) panel.loess(x, y, span = 0.6,
+                                        col = 1, lwd = 2)
+         })
+
+```
+
+First determine the random effects component. Use beyond optimal model:
+
+Doesn't look like variance increases with day but overall variance may be slightly different between treatment*batch combinations
+
+Not interested in the effect of microcolony so should include this as a random effect. Intercept and slope of both seem to change between microcolonies.
+
+```{r}
+# beyond optimal model.
+
+# biologically this is my beyond optimal model. I can imagine both treatment and batch potentially affecting the 
+# starting (intercept) consumption and the relationship between consumption and day. 
+
+M.lm <- lm(corrected_consumption ~ day + treatment + batch + treatment:batch + treatment:day + batch:day, data = sucrose)
+
+summary(M.lm)
+
+# use the residuals from this beyond optimal model
+plot(M.lm, which = c (1))
+```
+
+Violation of heterogeneity. Let's start by determining our optimal random effects structure. 
+
+```{r}
+library(nlme)
+
+M1.gls <- gls(corrected_consumption ~ day + treatment + batch + treatment:batch + treatment:day + batch:day, data = sucrose, method = "REML")
+
+E <- resid(M1.gls)
+
+op <- par(mfrow = c(2, 2))
+
+boxplot(E ~ sucrose$treatment, main = "Treatment")
+abline(0, 0)
+
+boxplot(E ~ sucrose$batch, main = "Batch")
+abline(0, 0)
+
+boxplot(E ~ sucrose$treatment * sucrose$batch, main = "Treatment & Batch")
+abline(0, 0)
+
+boxplot(E ~ sucrose$microcolony_number, main = "Microcolony")
+abline(0, 0)
+
+par(op)
+
+plot(E ~ sucrose$day, main = "Day")
+abline(0, 0)
+
+plot(M1.gls, which = c (1))
+```
+
+Day 2 batch3:control there are 4 points that are not in keeping with the rest of the data. Looks like I missed some slow leak spills. Without them my heterogeneity effectively disappears. 
+
+Perform the analysis with and without them to show their effect on the process. 
+
+Without them first. 
+
+```{r}
+sucrose <- sucrose [-c(105, 101, 107, 98),]
+
+M1.gls <- gls(corrected_consumption ~ day + treatment + batch + treatment:batch + treatment:day + batch:day, data = sucrose, method = "REML")
+
+E <- resid(M1.gls)
+
+op <- par(mfrow = c(2, 2))
+
+boxplot(E ~ sucrose$treatment, main = "Treatment")
+abline(0, 0)
+
+boxplot(E ~ sucrose$batch, main = "Batch")
+abline(0, 0)
+
+boxplot(E ~ sucrose$treatment * sucrose$batch, main = "Treatment & Batch")
+abline(0, 0)
+
+boxplot(E ~ sucrose$microcolony_number, main = "Microcolony")
+abline(0, 0)
+
+par(op)
+
+plot(E ~ sucrose$day, main = "Day")
+abline(0, 0)
+
+plot(M1.gls, which = c (1))
+```
+
+Select random effect components. I think varident with treatment and batch may be a good idea and microcolony with a random intercept and slope. 
+
+```{r}
+# random intercept?
+M1.lme <- lme(corrected_consumption ~ day + treatment + batch + 
+                treatment:batch + treatment:day + 
+                batch:day, data = sucrose, 
+              random =~1 | microcolony_number, method = "REML")
+
+AIC(M1.gls, M1.lme)
+
+anova(M1.gls, M1.lme)
+
+library(lmtest)
+lrtest(M1.gls, M1.lme)
+
+# random intercept is great improvement. Random intercept and slope?
+M2.lme <-  lme(corrected_consumption ~ day + treatment + batch + treatment:batch + treatment:day + batch:day, 
+               data = sucrose,
+               random =~1 + day | microcolony_number, method = "REML")
+
+AIC(M1.gls, M1.lme, M2.lme)
+
+# lower aic for random intercept and slope model. Not a large improvement but still an improvement
+
+# What about the variance structures?
+M2a.lme <- lme(corrected_consumption ~ day + treatment + batch + treatment:batch + treatment:day + batch:day,
+               data = sucrose,
+               random =~1 + day | microcolony_number, method = "REML",
+               weights = varIdent(form =~ 1 | treatment*batch))
+
+M2b.lme <- lme(corrected_consumption ~ day + treatment + batch + treatment:batch + treatment:day + batch:day,
+               data = sucrose,
+               random =~1 + day | microcolony_number, method = "REML",
+               weights = varIdent(form =~ 1 | batch))
+
+M2c.lme <- lme(corrected_consumption ~ day + treatment + batch + treatment:batch + treatment:day + batch:day,
+               data = sucrose,
+               random =~1 + day | microcolony_number, method = "REML",
+               weights = varIdent(form =~ 1 | treatment))
+
+AIC(M2.lme, M2a.lme, M2b.lme, M2c.lme)
+
+# batch varident is a significant improvement again. 
+```
+
+The optimal random effects structure is a random intercept and slope (1 + day | microcolony) with a variance structure that allows for a difference in variance between batch level.
+
+Have a look at the residual plots of model with selected random effects structure. 
+
+```{r}
+M2b.lme <- lme(corrected_consumption ~ day + treatment + batch + treatment:batch + treatment:day + batch:day,
+               data = sucrose,
+               random =~1 + day | microcolony_number, method = "REML",
+               weights = varIdent(form =~ 1 | batch))
+
+# extract residuals
+E.M2b.lme <- resid(M2b.lme, type = "normalized")
+
+# residuals vs fitted
+plot(M2b.lme, which = c (1))
+
+# residuals vs day
+plot(E.M2b.lme ~ sucrose$day, main = "Microcolony")
+abline(0, 0)
+
+op <- par(mfrow = c(2, 2))
+
+boxplot(E.M2b.lme ~ sucrose$treatment, main = "Treatment")
+abline(0, 0)
+
+boxplot(E.M2b.lme ~ sucrose$batch, main = "Batch")
+abline(0, 0)
+
+boxplot(E.M2b.lme ~ sucrose$treatment * sucrose$batch, main = "Treatment & Batch")
+abline(0, 0)
+
+boxplot(E.M2b.lme ~ sucrose$microcolony_number, main = "Microcolony")
+abline(0, 0)
+
+par(op)
+```
+
+```{r}
+# quick summary of model with optimal random effects structure
+summary(M2b.lme)
+```
+
+Switch back to ML for fixed effects and start model selection 
+
+```{r}
+# set method to ML
+M2b.lme <- lme(corrected_consumption ~ day + treatment + batch + treatment:batch + treatment:day + batch:day,
+               data = sucrose,
+               random =~1 + day | microcolony_number, method = "ML",
+               weights = varIdent(form =~ 1 | batch))
+
+# what does AIC say?
+library(MASS)
+stepAIC(M2b.lme)
+```
+
+Now manually
+
+```{r}
+# round 1
+M2b.lme.a <- update(M2b.lme, .~. - treatment:batch)
+M2b.lme.b <- update(M2b.lme, .~. - treatment:day)
+M2b.lme.c <- update(M2b.lme, .~. - batch:day)
+
+anova(M2b.lme, M2b.lme.a)
+anova(M2b.lme, M2b.lme.b)
+anova(M2b.lme, M2b.lme.c)
+
+# remove treatment:batch
+
+# round 2
+M2b.lme.d <- update(M2b.lme.a, .~. - treatment:day)
+M2b.lme.e <- update(M2b.lme.a, .~. - batch:day)
+
+anova(M2b.lme.a, M2b.lme.d)
+anova(M2b.lme.a, M2b.lme.e)
+
+# remove treatment:day
+
+# round 3
+M2b.lme.f <- update(M2b.lme.d, .~. - treatment)
+M2b.lme.g <- update(M2b.lme.d, .~. - batch:day)
+
+anova(M2b.lme.d, M2b.lme.f)
+anova(M2b.lme.d, M2b.lme.g)
+
+# final model M2b.lme.d
+```
+
+```{r}
+# refit with REML
+M2b.lme.d <- update(M2b.lme.d, method = "REML")
+
+summary(M2b.lme.d)
+```
+
+Model Validation 
+
+```{r}
+# extract residuals
+E.M2b.lme.d <- resid(M2b.lme.d, type = "pearson")
+
+# residuals vs fitted
+plot(M2b.lme.d, which = c (1))
+
+# residuals vs day
+xyplot(E.M2b.lme.d ~ day, data = sucrose,
+       xlab = "Day", ylab = "Pearson Residuals",
+       panel=function(x, y){
+         panel.xyplot(x, y, col = 1, cex = 0.5, pch = 1)
+         panel.grid(h = -1, v = 2)
+         panel.abline(v = 0, lty = 2)
+         if (length(x) > 5) panel.loess(x, y, span = 0.6,
+                                        col = 1, lwd = 2)
+         })
+
+# batches are different
+xyplot(E.M2b.lme.d ~ day | batch, data = sucrose,
+       xlab = "Day", ylab = "Pearson Residuals",
+       panel=function(x, y){
+         panel.xyplot(x, y, col = 1, cex = 0.5, pch = 1)
+         panel.grid(h = -1, v = 2)
+         panel.abline(v = 0, lty = 2)
+         if (length(x) > 5) panel.loess(x, y, span = 0.6,
+                                        col = 1, lwd = 2)
+         })
+
+xyplot(E.M2b.lme.d ~ day | batch*treatment, data = sucrose,
+       xlab = "Day", ylab = "Pearson Residuals",
+       panel=function(x, y){
+         panel.xyplot(x, y, col = 1, cex = 0.5, pch = 1)
+         panel.grid(h = -1, v = 2)
+         panel.abline(v = 0, lty = 2)
+         if (length(x) > 5) panel.loess(x, y, span = 0.6,
+                                        col = 1, lwd = 2)
+         })
+```
+
+Look at the visualisations
+
+```{r}
+# plot
+# predict values
+consumption <- predict(M2b.lme.d, value = "response")
+
+# generate line components
+dayvalues <- seq(1, 10, 0.1)
+
+data_list <- list()
+
+for (i in 1:length(unique(sucrose$batch))) {
+  mydata <- data.frame(
+    day = dayvalues,
+    batch = unique(sucrose$batch) [i],
+    treatment = unique(sucrose$treatment) [1])
+  
+  data_list [[i]] <- mydata
+}
+
+for (i in 1:length(unique(sucrose$batch))) {
+  mydata <- data.frame(
+    day = dayvalues,
+    batch = unique(sucrose$batch) [i],
+    treatment = unique(sucrose$treatment) [2])
+  
+  data_list [[i+3]] <- mydata
+}
+
+# re.form = NA, if NA or ~0, include no random effects.
+
+line_list <- list()
+
+for (i in 1:length(data_list)) {
+  
+  line <- predict(M2b.lme.d, data_list [[i]], type = "response", level = 0)
+  
+  line_list [[i]] <- line
+  
+}
+```
+
+[using predict in ggplot](https://aosmith.rbind.io/2018/11/16/plot-fitted-lines/#extracting-predicted-values-with-predict)
+
+[limitations of confidence intervals with lme](https://bbolker.github.io/mixedmodels-misc/glmmFAQ.html#is-the-likelihood-ratio-test-reliable-for-mixed-models)
+
+```{r}
+library(tidyverse)
+# confidence intervals. This method has its drawbacks though.
+# Note that none of the following approaches takes the uncertainty of the random effects parameters into account
+# If you want to take RE parameter uncertainty into account, a Bayesian approach is probably the easiest way to do it.
+library(bernr)
+
+# b1con
+b1_con_ci_l <- bolker_ci(M2b.lme.d, data_list [[1]], pred_int = FALSE, conf_level = 0.95) [6]
+b1_con_ci_h <- bolker_ci(M2b.lme.d, data_list [[1]], pred_int = FALSE, conf_level = 0.95) [7]
+
+# b2con
+b2_con_ci_l <- bolker_ci(M2b.lme.d, data_list [[2]], pred_int = FALSE, conf_level = 0.95) [6]
+b2_con_ci_h <- bolker_ci(M2b.lme.d, data_list [[2]], pred_int = FALSE, conf_level = 0.95) [7]
+
+# b3con
+b3_con_ci_l <- bolker_ci(M2b.lme.d, data_list [[3]], pred_int = FALSE, conf_level = 0.95) [6]
+b3_con_ci_h <- bolker_ci(M2b.lme.d, data_list [[3]], pred_int = FALSE, conf_level = 0.95) [7]
+
+# b1fpf
+b1_fpf_ci_l <- bolker_ci(M2b.lme.d, data_list [[4]], pred_int = FALSE, conf_level = 0.95) [6]
+b1_fpf_ci_h <- bolker_ci(M2b.lme.d, data_list [[4]], pred_int = FALSE, conf_level = 0.95) [7]
+
+# b2fpf
+b2_fpf_ci_l <- bolker_ci(M2b.lme.d, data_list [[5]], pred_int = FALSE, conf_level = 0.95) [6]
+b2_fpf_ci_h <- bolker_ci(M2b.lme.d, data_list [[5]], pred_int = FALSE, conf_level = 0.95) [7]
+
+# b3fpf
+b3_fpf_ci_l <- bolker_ci(M2b.lme.d, data_list [[6]], pred_int = FALSE, conf_level = 0.95) [6]
+b3_fpf_ci_h <- bolker_ci(M2b.lme.d, data_list [[6]], pred_int = FALSE, conf_level = 0.95) [7]
+
+# collect all required input into dataframes
+b1_con_df <- cbind(data_list [[1]], line_list [[1]], b1_con_ci_l, b1_con_ci_h )
+colnames(b1_con_df) [4] <- "corrected_consumption"
+b1_con_df$batch_treatment <- as.factor(paste0(b1_con_df$batch, "-", b1_con_df$treatment, sep = ""))
+  
+b2_con_df <- cbind(data_list [[2]], line_list [[2]], b2_con_ci_l, b2_con_ci_h )
+colnames(b2_con_df) [4] <- "corrected_consumption"
+b2_con_df$batch_treatment <- as.factor(paste0(b2_con_df$batch, "-", b2_con_df$treatment, sep = ""))
+
+b3_con_df <- cbind(data_list [[3]], line_list [[3]], b3_con_ci_l, b3_con_ci_h )
+colnames(b3_con_df) [4] <- "corrected_consumption"
+b3_con_df$batch_treatment <- as.factor(paste0(b3_con_df$batch, "-", b3_con_df$treatment, sep = ""))
+
+# collect all required input into dataframes
+b1_fpf_df <- cbind(data_list [[4]], line_list [[4]], b1_fpf_ci_l, b1_fpf_ci_h )
+colnames(b1_fpf_df) [4] <- "corrected_consumption"
+b1_fpf_df$batch_treatment <- as.factor(paste0(b1_fpf_df$batch, "-", b1_fpf_df$treatment, sep = ""))
+
+b2_fpf_df <- cbind(data_list [[5]], line_list [[5]], b2_fpf_ci_l, b2_fpf_ci_h )
+colnames(b2_fpf_df) [4] <- "corrected_consumption"
+b2_fpf_df$batch_treatment <- as.factor(paste0(b2_fpf_df$batch, "-", b2_fpf_df$treatment, sep = ""))
+
+b3_fpf_df <- cbind(data_list [[6]], line_list [[6]], b3_fpf_ci_l, b3_fpf_ci_h )
+colnames(b3_fpf_df) [4] <- "corrected_consumption"
+b3_fpf_df$batch_treatment <- as.factor(paste0(b3_fpf_df$batch, "-", b3_fpf_df$treatment, sep = ""))
+```
+
+```{r}
+sucrose$batch_treatment <- as.factor(paste0(sucrose$batch, "-", sucrose$treatment, sep = ""))
+
+p1 <- ggplot(sucrose, aes(x = day, y = corrected_consumption, colour = as.factor(batch_treatment))) + 
+  
+  geom_point(data = sucrose,
+             aes(x = day,
+                 y = corrected_consumption,
+                 colour = as.factor(batch_treatment)),
+             alpha = 0.25,
+             position  = position_dodge(width = 0.75),
+             show.legend = FALSE) +
+  
+  theme_bw() +
+  
+  geom_line(data = b1_con_df, aes(y = b1_con_df$corrected_consumption), size = 1) +
+  
+  geom_ribbon(data = b1_con_df, aes(ymin=b1_con_df$ci_l, ymax=b1_con_df$ci_h, fill = batch_treatment, color = NULL), alpha=0.2, show.legend = FALSE) +
+  
+  
+  geom_line(data = b2_con_df, aes(y = b2_con_df$corrected_consumption), size = 1) +
+  
+  geom_ribbon(data = b2_con_df, aes(ymin=b2_con_df$ci_l, ymax=b2_con_df$ci_h, fill = batch_treatment, color = NULL), alpha=0.2, show.legend = FALSE) +
+  
+
+  geom_line(data = b3_con_df, aes(y = b3_con_df$corrected_consumption), size = 1) +
+  
+  geom_ribbon(data = b3_con_df, aes(ymin=b3_con_df$ci_l, ymax=b3_con_df$ci_h, fill = batch_treatment, color = NULL), alpha=0.2, show.legend = FALSE) +
+  
+  
+  geom_line(data = b1_fpf_df, aes(y = b1_fpf_df$corrected_consumption), size = 1) +
+  
+  geom_ribbon(data = b1_fpf_df, aes(ymin=b1_fpf_df$ci_l, ymax=b1_fpf_df$ci_h, fill = batch_treatment, color = NULL), alpha=0.2, show.legend = FALSE) +
+  
+  
+  geom_line(data = b2_fpf_df, aes(y = b2_fpf_df$corrected_consumption), size = 1) +
+  
+  geom_ribbon(data = b2_fpf_df, aes(ymin=b2_fpf_df$ci_l, ymax=b2_fpf_df$ci_h, fill = batch_treatment, color = NULL), alpha=0.2, show.legend = FALSE) +
+  
+  
+  geom_line(data = b3_fpf_df, aes(y = b3_fpf_df$corrected_consumption), size = 1) +
+  
+  geom_ribbon(data = b3_fpf_df, aes(ymin=b3_fpf_df$ci_l, ymax=b3_fpf_df$ci_h, fill = batch_treatment, color = NULL), alpha=0.2, show.legend = FALSE) +
+  
+  
+
+  labs(y = "Sucrose Consumption", colour = "Batch") +
+  
+  ggtitle("Sucrose Consumption During Exposure Window") +
+    
+  theme(plot.title = element_text(hjust = 0.5)) +
+  
+  scale_color_manual(values = c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2")) +
+  
+  scale_fill_manual(values = c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2")) +
+
+  scale_x_continuous(breaks=seq(0,10,1)) +
+  
+  theme(legend.key = element_blank())
+
+p1
+```
+
+Without ribbons
+
+```{r}
+p2 <- ggplot(sucrose, aes(x = day, y = corrected_consumption, colour = as.factor(batch_treatment))) + 
+  
+  geom_point(data = sucrose,
+             aes(x = day,
+                 y = corrected_consumption,
+                 colour = as.factor(batch_treatment)),
+             alpha = 0.25,
+             position  = position_dodge(width = 0.75),
+             show.legend = FALSE) +
+  
+  theme_bw() +
+  
+  geom_line(data = b1_con_df, aes(y = b1_con_df$corrected_consumption), size = 1) +
+  
+  geom_line(data = b2_con_df, aes(y = b2_con_df$corrected_consumption), size = 1) +
+  
+  geom_line(data = b3_con_df, aes(y = b3_con_df$corrected_consumption), size = 1) +
+  
+  geom_line(data = b1_fpf_df, aes(y = b1_fpf_df$corrected_consumption), size = 1) +
+  
+  geom_line(data = b2_fpf_df, aes(y = b2_fpf_df$corrected_consumption), size = 1) +
+  
+  geom_line(data = b3_fpf_df, aes(y = b3_fpf_df$corrected_consumption), size = 1) +
+  
+  labs(y = "Sucrose Consumption", colour = "Batch") +
+  
+  ggtitle("Sucrose Consumption During Exposure Window") +
+    
+  theme(plot.title = element_text(hjust = 0.5)) +
+  
+  scale_color_manual(values = c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2")) +
+  
+  scale_fill_manual(values = c("#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2")) +
+
+  scale_x_continuous(breaks=seq(0,10,1)) +
+  
+  theme(legend.key = element_blank())
+
+p2
+```
+
+The form of analysis I can perform is severely limited by the number of unique day points I have (6). This model says fpf group sucrose consumption at the beginning of the experiment was significantly higher. Then the pattern of sucrose consumption over time depended on batch. Batch 2 had decreasing sucrose consumption, which is in keeping with batch 2 issues during transportation. 
+
+Of course these findings are undermined by patterns in the residuals. As there are only 6 timepoints, however, linear regression is really my only option. Or a really high span on a lowess. Then with lowess there is no way to perform mixed modelling. Also, with lowess the issue of having 6 time points is still present. 
+
+Looking at residuals vs fitted for batch*treatment day panels. Seems to be a tendency for the fpf intercept to be too high (more negative residuals than positive, therefore predicted larger than actual). 
+
+Due to the limits of this dataset I think it would be fair to reanalyse the dataset removing day and just looking at total sucrose consumption from day 1-10 for each treatment and batch. 
+

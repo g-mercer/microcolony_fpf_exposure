@@ -171,6 +171,15 @@ nectar_total_plot <- nectar_total_plot + geom_segment(aes(x=144,xend=144,y=t96_1
 nectar_total_plot <- nectar_total_plot + geom_segment(aes(x=192,xend=192,y=t144_192,yend=t192_240), inherit.aes = FALSE, color = colour_lines, alpha = 0.7, data = data.frame())
 
 nectar_total_plot
+
+# save
+ cairo_pdf(file = "./output/nectar_degradation.pdf",   # The directory you want to save the file in
+     width = 8, # The width of the plot in inches
+     height = 6) # The height of the plot in inches
+
+nectar_total_plot
+
+ dev.off()
 ```
 
 Visualise pollen in ggplot
@@ -222,24 +231,12 @@ pollen_total_plot <- pollen_total_plot + geom_segment(aes(x=24,xend=24,y=t0_24,y
 pollen_total_plot <- pollen_total_plot + geom_segment(aes(x=48,xend=48,y=t24_48,yend=t48_240), inherit.aes = FALSE, color = colour_lines, alpha = 0.7, data = data.frame())
 
 pollen_total_plot
-```
 
-```{r}
-# save
- cairo_pdf(file = "./output/nectar_degradation.pdf",   # The directory you want to save the file in
-     width = 8, # The width of the plot in inches
-     height = 6) # The height of the plot in inches
-
-nectar_total_plot
-
- dev.off()
- 
-  cairo_pdf(file = "./output/pollen_degradation.pdf",   # The directory you want to save the file in
-     width = 8, # The width of the plot in inches
-     height = 6) # The height of the plot in inches
+cairo_pdf(file = "./output/pollen_degradation.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
 
 pollen_total_plot
 
  dev.off()
 ```
-

@@ -137,7 +137,7 @@ anova(M1.lme, M2.lme)
 
 # small improvement
 
-# command plots the standardised residuals versus fitted values
+# plot the standardised residuals versus fitted values
 plot(M1.lme, col = 1) 
 plot(M2.lme, col = 1) 
 
@@ -174,33 +174,150 @@ anova(M1.lme, M1.lmeA)
 # drop batch
 M1.lmeB <- update(M1.lmeA, .~. -batch)
 
-anova(M1.lmeB, M1.lmeA)
-
-# dropped batch
+anova(M1.lmeA, M1.lmeB)
 
 # drop treatment 
-M1.lmeC <- update(M1.lmeB, .~. -treatment)
+M1.lmeC <- update(M1.lmeA, .~. -treatment)
 
-anova(M1.lmeC, M1.lmeB)
+anova(M1.lmeA, M1.lmeC)
+
+# dropped treatment
+M1.lmeD <- update(M1.lmeC, .~. -batch)
+
+anova(M1.lmeC, M1.lmeD)
 
 # nothing left bar an intercept
-# model validation. Bit pointless
-plot(M1.lmeC, col = 1)
+
+# add back in treatment as I am interested in its effect, or lack of. Model validation.
+M1.lmeE <- lme(drone_mass_mg ~ 1 + treatment,
+               data = drone_mass_df,
+               random = ~ 1 | colony_number/microcolony_number, method = "ML")
+
+plot(M1.lmeE, col = 1)
 
 # refit model with REML
-M1.lmeC <- lme(drone_mass_mg ~ 1,
-               data = drone_mass_df,
-               random = ~ 1 | colony_number/microcolony_number, method = "REML")
+M1.lmeE <- update(M1.lmeE, method = "REML")
 
-summary(M1.lmeC)
-
-# adding variance structure for treatment and batch does improve residuals slightly. 
-M1.lmeD <- lme(drone_mass_mg ~ 1,
-               data = drone_mass_df,
-               weights = varIdent(form = ~ 1 | treatment * batch),
-               random = ~ 1 | colony_number/microcolony_number, method = "REML")
-
-plot(M1.lmeD, col = 1)
+summary(M1.lmeE)
 ```
 
+Visualisations
+
+```{r}
+boxplot(predict(M1.lmeE, level = 0, interval = confidence) ~ treatment, data = drone_mass_df)
+```
+
+Refit with lmer to (more) easily get confidence intervals
+
+```{r}
+library(lme4)
+# https://stackoverflow.com/questions/11072544/how-to-get-coefficients-and-their-confidence-intervals-in-mixed-effects-models
+
+# bit of a nightmare returning the CIs. Have to specify model with lmer, run it, run confint, then relevel to get CIs for
+# other treatment level. 
+M1.lmer <- lmer(drone_mass_mg ~ 1 + treatment + (1 | colony_number/microcolony_number), 
+                data = drone_mass_df, REML = TRUE)
+
+M1.lmer.CI <- confint(M1.lmer)
+
+M1.lmer.coeff <- summary(M1.lmer)$coefficients
+
+control <- c(summary(M1.lmer)$coefficients [1], M1.lmer.CI [4, 1], M1.lmer.CI [4, 2])
+
+drone_mass_df$treatment <- relevel(drone_mass_df$treatment, "fpf-pure")
+
+M1.lmer <- lmer(drone_mass_mg ~ 1 + treatment + (1 | colony_number/microcolony_number), 
+                data = drone_mass_df, REML = TRUE)
+
+M1.lmer.CI <- confint(M1.lmer)
+
+M1.lmer.coeff <- summary(M1.lmer)$coefficients
+
+fpf_pure <- c(summary(M1.lmer)$coefficients [1], M1.lmer.CI [4, 1], M1.lmer.CI [4, 2])
+
+
+# use this for the visualisation plus the raw data. 
+M1.lmer.df <- data.frame(control, fpf_pure)
+```
+
+```{r}
+# get df into right format
+M1.lmer.df <- t(M1.lmer.df)
+treatment <- c("control", "fpf-pure")
+M1.lmer.df <- cbind(M1.lmer.df, treatment)
+colnames(M1.lmer.df) <- c("prediction", "ci_l", "ci_h", "treatment")
+rownames(M1.lmer.df) <- c()
+M1.lmer.df <- as.data.frame(M1.lmer.df)
+M1.lmer.df$treatment <- as.factor(M1.lmer.df$treatment)
+M1.lmer.df$prediction <- as.numeric(as.character(M1.lmer.df$prediction))
+M1.lmer.df$ci_l <- as.numeric(as.character(M1.lmer.df$ci_l))
+M1.lmer.df$ci_h <- as.numeric(as.character(M1.lmer.df$ci_h))
+
+# create df for adding p value to plot
+group1 <- "control"
+group2 <- "treatment"
+# summary(M1.lmeE) [20]
+p <- 6.792155e-01
+p.signif <- "ns"
+p_data <- as.data.frame(cbind(group1, group2, p , p.signif))
+```
+
+```{r}
+# library(ggpubr)
+
+# ggplot
+p1 <- ggplot(data = M1.lmer.df, aes(x = treatment, y = prediction, colour = as.factor(treatment))) + 
+  
+  geom_point(position = position_dodge(width = 0.75), size = 3) +
+  
+  geom_errorbar(aes(x = treatment,
+                    ymin = ci_l,
+                    ymax = ci_h,
+                    colour = as.factor(treatment)),
+                position = position_dodge(width = 0.75),
+                width = 0.05, 
+                size = 0.8) +
+  
+  geom_point(data = drone_mass_df,
+             aes(x = treatment,
+                 y = drone_mass_mg,
+                 colour = as.factor(treatment)),
+             alpha = 0.25,
+             position  = position_jitterdodge(),
+             show.legend = FALSE) +
+  
+  theme_bw() +
+
+  labs(y = "Drone Mass (mg)", colour = "Treatment") +
+    
+  #theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    
+  ggtitle("Drone Mass") +
+    
+  theme(plot.title = element_text(hjust = 0.5), axis.title.x = element_blank()) +
+  
+  scale_color_manual(values = c("#117733", "#332288")) 
+
+p1
+
+# can't install ggpubr because quantreg package is playing up add this to get p values when I can 
+# +
+# stat_pvalue_manual(p_data, 
+#                     y.position = 800, step.increase = 0.1,
+#                     label = "p.adj.signif",
+#                     size = 3,
+#                     hide.ns = TRUE)
+
+```
+
+
+```{r}
+cairo_pdf(file = "./treatment_boxplot.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+p1
+
+ dev.off()
+```
 
