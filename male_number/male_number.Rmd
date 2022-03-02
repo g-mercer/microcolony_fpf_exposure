@@ -1,5 +1,5 @@
 ---
-title: "Drone Number"
+title: "male Number"
 author: "Guy Mercer"
 date: "21/01/2022"
 output: html_document
@@ -12,19 +12,19 @@ knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 Import data
 
 ```{r}
-drones <- read.csv("input/number_of_drones.csv")
+males <- read.csv("input/number_of_males.csv")
 
-drones$batch <- as.factor(drones$batch)
-drones$colony <- as.factor(drones$colony)
-drones$treatment <- as.factor(drones$treatment)
+males$batch <- as.factor(males$batch)
+males$colony <- as.factor(males$colony)
+males$treatment <- as.factor(males$treatment)
 
-drones$number_of_drones <- as.numeric(drones$number_of_drones)
+males$number_of_males <- as.numeric(males$number_of_males)
 ```
 
 Start with a frequency plot 
 
 ```{r}
-plot(table(drones$number_of_drones))
+plot(table(males$number_of_males))
 ```
 
 Start with zero inflated poisson. Look at residuals vs fitted. Patterns? Compare to zero inflated NB with likelihood ratio test. Select appropriate. Patterns in residuals better? Plot against random effect variable. Move onto ZIGLMM using glmmTMB. Compare zero inflated model to zero inflated mixed model using a likelihood ratio test. Select appropriate. 
@@ -32,23 +32,23 @@ Start with zero inflated poisson. Look at residuals vs fitted. Patterns? Compare
 At this stage I will have appropriate distribution and random effect structure. Next, perform fixed effect model selection. Complete and check residuals vs fitted and residuals against remaining explanatory variables. All ok? 
 
 ```{r}
-boxplot(number_of_drones ~ treatment,
+boxplot(number_of_males ~ treatment,
         varwidth = TRUE, xlab = "Treatment",
-        main = "Boxplot of Drone Number Conditional on Treatment", 
-        ylab = "Number of Drones", data = drones)
+        main = "Boxplot of male Number Conditional on Treatment", 
+        ylab = "Number of males", data = males)
 
-drones$clevelandcode <- factor(
-ifelse(drones$treatment == "control",
+males$clevelandcode <- factor(
+ifelse(males$treatment == "control",
 1,
 2))
 
-drones$clevelandcode <- as.numeric(drones$clevelandcode)
+males$clevelandcode <- as.numeric(males$clevelandcode)
 
 
-dotchart(drones$number_of_drones,
-         groups = factor(drones$clevelandcode),
+dotchart(males$number_of_males,
+         groups = factor(males$clevelandcode),
          ylab = "Order of observations",
-         xlab = "Drone Number", main = "Cleveland dotplot", pch = drones$clevelandcode)
+         xlab = "male Number", main = "Cleveland dotplot", pch = males$clevelandcode)
 ```
 
 No outliers. Heterogeneity looks similar between treatment groups too. 
@@ -58,13 +58,13 @@ Fit ZIP. Only have a random intercept as none of my covariates will explain the 
 ```{r}
 library(glmmTMB)
 
-M1 <- glmmTMB(number_of_drones ~ treatment * batch,
-              data = drones,
+M1 <- glmmTMB(number_of_males ~ treatment * batch,
+              data = males,
               ziformula=~1,
               family = poisson)
 
-M2 <- glmmTMB(number_of_drones ~ treatment * batch,
-              data = drones,
+M2 <- glmmTMB(number_of_males ~ treatment * batch,
+              data = males,
               ziformula=~1,
               family = "nbinom2",)
 
@@ -80,11 +80,11 @@ Take a look at the residuals. Refit with pscl as I can extract the residuals fro
 ```{r}
 library(pscl)
 
-Zip1 <- zeroinfl(number_of_drones ~ treatment * batch | 1, dist = "poisson",
-                 link = "logit", data = drones)
+Zip1 <- zeroinfl(number_of_males ~ treatment * batch | 1, dist = "poisson",
+                 link = "logit", data = males)
 
-Zinb1 <- zeroinfl(number_of_drones ~ treatment * batch | 1, dist = "negbin",
-                 link = "logit", data = drones)
+Zinb1 <- zeroinfl(number_of_males ~ treatment * batch | 1, dist = "negbin",
+                 link = "logit", data = males)
 
 library(lmtest)
 lrtest(Zip1,Zinb1)
@@ -95,7 +95,7 @@ mu <- predict(Zinb1, type = "response")
 
 plot(x = mu, y = EP, main = "Pearson Residuals")
 
-boxplot(EP ~ drones$colony, main = "Colony")
+boxplot(EP ~ males$colony, main = "Colony")
 abline(0, 0)
 ```
 
@@ -104,15 +104,15 @@ Comparison of anova(M1,M2) and lrtest(Zip1,Zinb1) shows REML = FALSE for glmmTMB
 Residuals vs colony shows colony is important so fit as a random effect. 
 
 ```{r}
-M3 <- glmmTMB(number_of_drones ~ treatment * batch,
-              data = drones,
+M3 <- glmmTMB(number_of_males ~ treatment * batch,
+              data = males,
               ziformula=~1,
               family = "nbinom2",
               REML = TRUE)
 
 
-M4 <- glmmTMB(number_of_drones ~ treatment * batch + (1 | colony),
-              data = drones,
+M4 <- glmmTMB(number_of_males ~ treatment * batch + (1 | colony),
+              data = males,
               ziformula=~1,
               family = "nbinom2",
               REML = TRUE)
@@ -129,13 +129,13 @@ Or perform analysis twice, with colony and without colony and see if there are a
 
 ```{r}
 # with colony
-M5 <- glmmTMB(number_of_drones ~ treatment * batch + (1 | colony),
-              data = drones,
+M5 <- glmmTMB(number_of_males ~ treatment * batch + (1 | colony),
+              data = males,
               ziformula=~1,
               family = "nbinom2")
 
-M5a <- glmmTMB(number_of_drones ~ treatment + batch + (1 | colony),
-              data = drones,
+M5a <- glmmTMB(number_of_males ~ treatment + batch + (1 | colony),
+              data = males,
               ziformula=~1,
               family = "nbinom2")
 
@@ -144,24 +144,24 @@ anova(M5, M5a)
 # removed interaction. M5a reference.
 
 # remove batch
-M5b <- glmmTMB(number_of_drones ~ treatment + (1 | colony),
-              data = drones,
+M5b <- glmmTMB(number_of_males ~ treatment + (1 | colony),
+              data = males,
               ziformula=~1,
               family = "nbinom2")
 
 anova(M5a, M5b)
 
 # remove treatment
-M5c <- glmmTMB(number_of_drones ~ batch + (1 | colony),
-              data = drones,
+M5c <- glmmTMB(number_of_males ~ batch + (1 | colony),
+              data = males,
               ziformula=~1,
               family = "nbinom2")
 
 anova(M5a, M5c)
 
 # treatment least significant so remove. M5c reference
-M5d <- glmmTMB(number_of_drones ~ 1 + (1 | colony),
-              data = drones,
+M5d <- glmmTMB(number_of_males ~ 1 + (1 | colony),
+              data = males,
               ziformula=~1,
               family = "nbinom2")
 
@@ -177,25 +177,25 @@ summary(M5d)
 Let's do it again without colony as a random intercept. 
 
 ```{r}
-Zinb1a <- zeroinfl(number_of_drones ~ treatment + batch | 1, dist = "negbin",
-                 link = "logit", data = drones)
+Zinb1a <- zeroinfl(number_of_males ~ treatment + batch | 1, dist = "negbin",
+                 link = "logit", data = males)
 
 lrtest(Zinb1, Zinb1a)
 
 # Zinb1a reference
-Zinb1b <- zeroinfl(number_of_drones ~ treatment | 1, dist = "negbin",
-                 link = "logit", data = drones)
+Zinb1b <- zeroinfl(number_of_males ~ treatment | 1, dist = "negbin",
+                 link = "logit", data = males)
 
 lrtest(Zinb1a, Zinb1b)
 
-Zinb1c <- zeroinfl(number_of_drones ~ batch | 1, dist = "negbin",
-                 link = "logit", data = drones)
+Zinb1c <- zeroinfl(number_of_males ~ batch | 1, dist = "negbin",
+                 link = "logit", data = males)
 
 lrtest(Zinb1a, Zinb1c)
 
 # Zinb1c reference
-Zinb1d <- zeroinfl(number_of_drones ~ 1 | 1, dist = "negbin",
-                 link = "logit", data = drones)
+Zinb1d <- zeroinfl(number_of_males ~ 1 | 1, dist = "negbin",
+                 link = "logit", data = males)
 
 lrtest(Zinb1c, Zinb1d)
 ```
@@ -216,30 +216,30 @@ plot(x = mu, y = ED1, main = "Deviance residuals")
 boxplot(ED1 ~ treatment,
         varwidth = TRUE, xlab = "Treatment",
         main = "Residuals vs Treatment", 
-        ylab = "Residuals", data = drones)
+        ylab = "Residuals", data = males)
 
 boxplot(ED1 ~ batch,
         varwidth = TRUE, xlab = "Batch",
         main = "Residuals vs Batch", 
-        ylab = "Residuals", data = drones)
+        ylab = "Residuals", data = males)
 ```
 
 For report, use these figures for batch, treatment and treatment:batch
 
 ```{r}
-Zinb1a <- zeroinfl(number_of_drones ~ treatment + batch | 1, dist = "negbin",
-                 link = "logit", data = drones)
+Zinb1a <- zeroinfl(number_of_males ~ treatment + batch | 1, dist = "negbin",
+                 link = "logit", data = males)
 
 lrtest(Zinb1, Zinb1a)
 
-Zinb1b <- zeroinfl(number_of_drones ~ treatment | 1, dist = "negbin",
-                 link = "logit", data = drones)
+Zinb1b <- zeroinfl(number_of_males ~ treatment | 1, dist = "negbin",
+                 link = "logit", data = males)
 
-Zinb1c <- zeroinfl(number_of_drones ~ batch | 1, dist = "negbin",
-                 link = "logit", data = drones)
+Zinb1c <- zeroinfl(number_of_males ~ batch | 1, dist = "negbin",
+                 link = "logit", data = males)
 
-Zinb1d <- zeroinfl(number_of_drones ~ 1 | 1, dist = "negbin",
-                 link = "logit", data = drones)
+Zinb1d <- zeroinfl(number_of_males ~ 1 | 1, dist = "negbin",
+                 link = "logit", data = males)
 
 lrtest(Zinb1c, Zinb1d)
 
@@ -249,15 +249,15 @@ lrtest(Zinb1b, Zinb1d)
 Use this for colony
 
 ```{r}
-M3 <- glmmTMB(number_of_drones ~ treatment * batch,
-              data = drones,
+M3 <- glmmTMB(number_of_males ~ treatment * batch,
+              data = males,
               ziformula=~1,
               family = "nbinom2",
               REML = TRUE)
 
 
-M4 <- glmmTMB(number_of_drones ~ treatment * batch + (1 | colony),
-              data = drones,
+M4 <- glmmTMB(number_of_males ~ treatment * batch + (1 | colony),
+              data = males,
               ziformula=~1,
               family = "nbinom2",
               REML = TRUE)
@@ -270,8 +270,8 @@ anova(M3, M4)
  Refit with REML
  
 ```{r}
-M3 <- glmmTMB(number_of_drones ~ 1,
-              data = drones,
+M3 <- glmmTMB(number_of_males ~ 1,
+              data = males,
               ziformula=~1,
               family = "nbinom2",
               REML = TRUE)
@@ -282,9 +282,9 @@ summary(M3)
  Add treatment back in as that is what we are interested in. Want to show its lack of effect. 
  
 ```{r}
-drones$treatment <- relevel(drones$treatment, "control")
-M4 <- glmmTMB(number_of_drones ~ 1 + treatment,
-              data = drones,
+males$treatment <- relevel(males$treatment, "control")
+M4 <- glmmTMB(number_of_males ~ 1 + treatment,
+              data = males,
               ziformula=~1,
               family = "nbinom2",
               REML = TRUE)
@@ -295,10 +295,10 @@ summary(M4)
 con_ci <- confint(M4)
 
 # fpf ci
-drones$treatment <- relevel(drones$treatment, "fpf-pure")
+males$treatment <- relevel(males$treatment, "fpf-pure")
 
-M4 <- glmmTMB(number_of_drones ~ 1 + treatment,
-              data = drones,
+M4 <- glmmTMB(number_of_males ~ 1 + treatment,
+              data = males,
               ziformula=~1,
               family = "nbinom2",
               REML = TRUE)
@@ -334,9 +334,9 @@ p1 <- ggplot(data = predictions, aes(x = treatment, y = Prediction, colour = as.
                 width = 0.05, 
                 size = 0.8) +
   
-  geom_point(data = drones,
+  geom_point(data = males,
              aes(x = treatment,
-                 y = number_of_drones,
+                 y = number_of_males,
                  colour = as.factor(treatment)),
              alpha = 0.4,
              position  = position_jitterdodge(),
@@ -344,11 +344,11 @@ p1 <- ggplot(data = predictions, aes(x = treatment, y = Prediction, colour = as.
   
   theme_bw() +
 
-  labs(y = "Number of Drones", colour = "Treatment") +
+  labs(y = "Number of males", colour = "Treatment") +
     
   # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
     
-  ggtitle("Drone Number") +
+  ggtitle("male Number") +
     
   theme(plot.title = element_text(hjust = 0.5), axis.title.x = element_blank()) +
   

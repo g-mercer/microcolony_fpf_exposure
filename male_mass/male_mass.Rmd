@@ -1,5 +1,5 @@
 ---
-title: "Drone Mass Analysis"
+title: "Male Mass Analysis"
 author: "Guy Mercer"
 date: "20/01/2022"
 output: html_document
@@ -18,27 +18,27 @@ library(tidyverse)
 Import data and give all the variables the suitable class
 
 ```{r}
-drone_mass_df <- read.csv("input/drone_mass.csv")
+male_mass_df <- read.csv("input/male_mass.csv")
 
-drone_mass_df$drone_number <- as.numeric(drone_mass_df$drone_number)
+male_mass_df$male_number <- as.numeric(male_mass_df$male_number)
 
-drone_mass_df$microcolony_number <- as.factor(drone_mass_df$microcolony_number)
+male_mass_df$microcolony_number <- as.factor(male_mass_df$microcolony_number)
 
-drone_mass_df$batch <- as.factor(drone_mass_df$batch)
+male_mass_df$batch <- as.factor(male_mass_df$batch)
 
-drone_mass_df$colony_number <- as.factor(drone_mass_df$colony_number)
+male_mass_df$colony_number <- as.factor(male_mass_df$colony_number)
 
-drone_mass_df$treatment <- as.factor(drone_mass_df$treatment)
+male_mass_df$treatment <- as.factor(male_mass_df$treatment)
 
-drone_mass_df$dry_mass_g <- as.numeric(drone_mass_df$dry_mass_g)
+male_mass_df$dry_mass_g <- as.numeric(male_mass_df$dry_mass_g)
 ```
 
-Express drone mass in terms of mg not g and update column header
+Express male mass in terms of mg not g and update column header
 
 ```{r}
-drone_mass_df$dry_mass_g <- drone_mass_df$dry_mass_g * 1000
+male_mass_df$dry_mass_g <- male_mass_df$dry_mass_g * 1000
 
-colnames(drone_mass_df) [6] <- "drone_mass_mg"
+colnames(male_mass_df) [6] <- "male_mass_mg"
 ```
 
 Data Exploration
@@ -46,43 +46,43 @@ Data Exploration
 ```{r}
 # Cleveland Dot Plot. First make column with 1 and 2 that correspond to Treatment levels
 
-drone_mass_df$clevelandcode <- factor(
-ifelse(drone_mass_df$treatment == "control",
+male_mass_df$clevelandcode <- factor(
+ifelse(male_mass_df$treatment == "control",
 1,
 2))
 
-drone_mass_df$clevelandcode <- as.numeric(drone_mass_df$clevelandcode)
+male_mass_df$clevelandcode <- as.numeric(male_mass_df$clevelandcode)
 
-dotchart(drone_mass_df$drone_mass_mg,
-         groups = factor(drone_mass_df$clevelandcode),
+dotchart(male_mass_df$male_mass_mg,
+         groups = factor(male_mass_df$clevelandcode),
          ylab = "Order of observations",
-         xlab = "Drone Mass (mg)", main = "Cleveland dotplot", pch = drone_mass_df$clevelandcode)
+         xlab = "male Mass (mg)", main = "Cleveland dotplot", pch = male_mass_df$clevelandcode)
 
-boxplot(drone_mass_mg ~ treatment * batch,
+boxplot(male_mass_mg ~ treatment * batch,
         varwidth = TRUE, xlab = "Treatment",
-        main = "Boxplot of Drone Mass Conditional on Treatment and Batch", 
-        ylab = "Drone Mass", data = drone_mass_df)
+        main = "Boxplot of male Mass Conditional on Treatment and Batch", 
+        ylab = "male Mass", data = male_mass_df)
 
-boxplot(drone_mass_mg ~ batch,
+boxplot(male_mass_mg ~ batch,
         varwidth = TRUE, xlab = "Treatment",
-        main = "Boxplot of Drone Mass Conditional on Batch", 
-        ylab = "Drone Mass", data = drone_mass_df)
+        main = "Boxplot of male Mass Conditional on Batch", 
+        ylab = "male Mass", data = male_mass_df)
 
-boxplot(drone_mass_mg ~ treatment,
+boxplot(male_mass_mg ~ treatment,
         varwidth = TRUE, xlab = "Treatment",
-        main = "Boxplot of Drone Mass Conditional on Treatment", 
-        ylab = "Drone Mass", data = drone_mass_df)
+        main = "Boxplot of male Mass Conditional on Treatment", 
+        ylab = "male Mass", data = male_mass_df)
 ```
 
 Data Exploration wasn't difficult as I haven't got many explanatory variables to choose from. I think a suitable starting model is
 
-drone mass ~ treatment * batch + (1 | colony/microcolony) 
+male mass ~ treatment * batch + (1 | colony/microcolony) 
 
 Let's begin with a linear model
 
 ```{r}
-M.lm <- lm(drone_mass_mg ~ treatment * batch,
-           data = drone_mass_df)
+M.lm <- lm(male_mass_mg ~ treatment * batch,
+           data = male_mass_df)
 
 drop1(M.lm, test = "F")
 
@@ -94,23 +94,23 @@ Violation of homogeneity. Refit with gls and look at the residuals vs treatment,
 
 ```{r}
 library(nlme)
-M1.gls <- gls(drone_mass_mg ~ treatment * batch,
-           data = drone_mass_df)
+M1.gls <- gls(male_mass_mg ~ treatment * batch,
+           data = male_mass_df)
 
 E <- resid(M1.gls)
 
 op <- par(mfrow = c(2, 2))
 
-boxplot(E ~ drone_mass_df$treatment, main = "Treatment")
+boxplot(E ~ male_mass_df$treatment, main = "Treatment")
 abline(0, 0)
 
-boxplot(E ~ drone_mass_df$batch, main = "Batch")
+boxplot(E ~ male_mass_df$batch, main = "Batch")
 abline(0, 0)
 
-boxplot(E ~ drone_mass_df$treatment * drone_mass_df$batch, main = "Treatment & Batch")
+boxplot(E ~ male_mass_df$treatment * male_mass_df$batch, main = "Treatment & Batch")
 abline(0, 0)
 
-boxplot(E ~ drone_mass_df$microcolony_number, main = "Microcolony")
+boxplot(E ~ male_mass_df$microcolony_number, main = "Microcolony")
 abline(0, 0)
 ```
 
@@ -120,16 +120,16 @@ Fit varIdent variance structure and microcolony/colony as a random effect.
 
 ```{r}
 # start with random intercept
-M1.lme <- lme(drone_mass_mg ~ treatment * batch,
-              data = drone_mass_df,
+M1.lme <- lme(male_mass_mg ~ treatment * batch,
+              data = male_mass_df,
               random = ~ 1 | colony_number/microcolony_number, method = "REML")
 
 AIC(M1.lme, M1.gls)
 anova(M1.gls, M1.lme)
 
 # large improvement. Add varIdent
-M2.lme <- lme(drone_mass_mg ~ treatment * batch,
-              data = drone_mass_df,
+M2.lme <- lme(male_mass_mg ~ treatment * batch,
+              data = male_mass_df,
               weights = varIdent(form = ~ 1 | treatment * batch),
               random = ~ 1 | colony_number/microcolony_number, method = "REML")
 
@@ -141,12 +141,12 @@ anova(M1.lme, M2.lme)
 plot(M1.lme, col = 1) 
 plot(M2.lme, col = 1) 
 
-E1 <- resid(M1.lme)
-boxplot(E1 ~ drone_mass_df$treatment * drone_mass_df$batch, main = "Treatment & Batch")
+E1 <- resid(M1.lme, type = "normalized")
+boxplot(E1 ~ male_mass_df$treatment * male_mass_df$batch, main = "Treatment & Batch")
 abline(0, 0)
 
-E2 <- resid(M2.lme)
-boxplot(E2 ~ drone_mass_df$treatment * drone_mass_df$batch, main = "Treatment & Batch")
+E2 <- resid(M2.lme, type = "normalized")
+boxplot(E2 ~ male_mass_df$treatment * male_mass_df$batch, main = "Treatment & Batch")
 abline(0, 0)
 ```
 
@@ -154,14 +154,16 @@ First point of slight confusion. Slightly different approaches are taken when fi
 
 If, however, I had started with the variance structure and compared to M1.gls, the basic model, none of the the varIdent options (treatment*batch, batch, treatment) were improvements. This is another common approach Zuur takes. 
 
-I have looked at the residuals vs fitted for each model and residuals vs batchxtreatment and adding batchxtreatment variance structure does not seem to improve it. Therefore I am going to remove it and go for the simpler model.
+I have looked at the residuals vs fitted for each model and residuals vs batchxtreatment and adding batchxtreatment variance structure does  seem to improve it. Therefore I am going to keep it.
 
 Continue with M1.lme. Model selection of fixed terms.
 
 ```{r}
 # redefine with ML
-M1.lme <- lme(drone_mass_mg ~ treatment * batch,
-              data = drone_mass_df,
+# I realise there is a naming issue here. M2.lme has become M1.lme. It has no effect on the analysis though. 
+M1.lme <- lme(male_mass_mg ~ treatment * batch,
+              data = male_mass_df,
+              weights = varIdent(form = ~ 1 | treatment * batch),
               random = ~ 1 | colony_number/microcolony_number, method = "ML")
 
 # drop interaction term
@@ -189,8 +191,8 @@ anova(M1.lmeC, M1.lmeD)
 # nothing left bar an intercept
 
 # add back in treatment as I am interested in its effect, or lack of. Model validation.
-M1.lmeE <- lme(drone_mass_mg ~ 1 + treatment,
-               data = drone_mass_df,
+M1.lmeE <- lme(male_mass_mg ~ 1 + treatment,
+               data = male_mass_df,
                random = ~ 1 | colony_number/microcolony_number, method = "ML")
 
 plot(M1.lmeE, col = 1)
@@ -204,7 +206,7 @@ summary(M1.lmeE)
 Visualisations
 
 ```{r}
-boxplot(predict(M1.lmeE, level = 0, interval = confidence) ~ treatment, data = drone_mass_df)
+boxplot(predict(M1.lmeE, level = 0, interval = confidence) ~ treatment, data = male_mass_df)
 ```
 
 Refit with lmer to (more) easily get confidence intervals
@@ -215,8 +217,8 @@ library(lme4)
 
 # bit of a nightmare returning the CIs. Have to specify model with lmer, run it, run confint, then relevel to get CIs for
 # other treatment level. 
-M1.lmer <- lmer(drone_mass_mg ~ 1 + treatment + (1 | colony_number/microcolony_number), 
-                data = drone_mass_df, REML = TRUE)
+M1.lmer <- lmer(male_mass_mg ~ 1 + treatment + (1 | colony_number/microcolony_number), 
+                data = male_mass_df, REML = TRUE)
 
 M1.lmer.CI <- confint(M1.lmer)
 
@@ -224,10 +226,10 @@ M1.lmer.coeff <- summary(M1.lmer)$coefficients
 
 control <- c(summary(M1.lmer)$coefficients [1], M1.lmer.CI [4, 1], M1.lmer.CI [4, 2])
 
-drone_mass_df$treatment <- relevel(drone_mass_df$treatment, "fpf-pure")
+male_mass_df$treatment <- relevel(male_mass_df$treatment, "fpf-pure")
 
-M1.lmer <- lmer(drone_mass_mg ~ 1 + treatment + (1 | colony_number/microcolony_number), 
-                data = drone_mass_df, REML = TRUE)
+M1.lmer <- lmer(male_mass_mg ~ 1 + treatment + (1 | colony_number/microcolony_number), 
+                data = male_mass_df, REML = TRUE)
 
 M1.lmer.CI <- confint(M1.lmer)
 
@@ -278,9 +280,9 @@ p1 <- ggplot(data = M1.lmer.df, aes(x = treatment, y = prediction, colour = as.f
                 width = 0.05, 
                 size = 0.8) +
   
-  geom_point(data = drone_mass_df,
+  geom_point(data = male_mass_df,
              aes(x = treatment,
-                 y = drone_mass_mg,
+                 y = male_mass_mg,
                  colour = as.factor(treatment)),
              alpha = 0.25,
              position  = position_jitterdodge(),
@@ -288,11 +290,11 @@ p1 <- ggplot(data = M1.lmer.df, aes(x = treatment, y = prediction, colour = as.f
   
   theme_bw() +
 
-  labs(y = "Drone Mass (mg)", colour = "Treatment") +
+  labs(y = "male Mass (mg)", colour = "Treatment") +
     
   #theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
     
-  ggtitle("Drone Mass") +
+  ggtitle("male Mass") +
     
   theme(plot.title = element_text(hjust = 0.5), axis.title.x = element_blank()) +
   

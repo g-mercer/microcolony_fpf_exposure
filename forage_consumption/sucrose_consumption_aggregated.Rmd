@@ -269,7 +269,7 @@ M1.gls.d <- update(M1.gls.b, .~. - batch)
 anova(M1.gls.b, M1.gls.d)
 ```
 
-Manually only batch has an effect. Refit with REML and look at validation plots. Zuur has a value of 0.04 in one of his examples and states in a series of hypothesis tests it is hardly convincing. Should probably drop batch as well. Page 113 of pdf document and page 297 with example of 0.026. Are the p values from the above approximate? Either way I don't think the result is convincing enough to retain batch. Later on when sorting out heterogeneity in the residuals, once random structures were included, if model selection was performed again batch was not significant. 
+Manually only batch has an effect. Refit with REML and look at validation plots. Zuur has a value of 0.04 in one of his examples and states in a series of hypothesis tests it is hardly convincing.  Page 113 of pdf document and page 297 with example of 0.026. Are the p values from the above approximate? Considering multiple hypothesis testing batch is questionable. Retain for now.
 
 ```{r}
 # refit with REML
@@ -312,7 +312,7 @@ M2a.lme <- lme(corrected_consumption ~ batch,
                weights = varIdent(form =~ 1 | batch*treatment))
 
 # extract residuals
-E <- resid(M2a.lme, type = "pearson")
+E <- resid(M2a.lme, type = "normalized")
 
 # residuals vs fitted
 plot(M2a.lme, which = c (1))
@@ -367,8 +367,10 @@ This would leave us with an intercept only model.
 
 ```{r}
 # intercept only
+M3a.lme.d <- update(M3a.lme.d, method = "REML")
+
 # extract residuals
-E <- resid(M3a.lme.d, type = "pearson")
+E <- resid(M3a.lme.d, type = "normalized")
 
 # residuals vs fitted
 plot(M3a.lme.d, which = c (1))
@@ -388,9 +390,37 @@ boxplot(E ~ sucrose$colony_derived_from, main = "Colony")
 abline(0, 0)
 
 par(op)
+
+# compare to 
+M2a.lme <- lme(corrected_consumption ~ batch,
+               data = sucrose,
+               random =~1 | colony_derived_from, method = "REML",
+               weights = varIdent(form =~ 1 | batch*treatment))
+
+# extract residuals
+E <- resid(M2a.lme, type = "normalized")
+
+# residuals vs fitted
+plot(M2a.lme, which = c (1))
+
+op <- par(mfrow = c(2, 2))
+
+boxplot(E ~ sucrose$treatment, main = "Treatment")
+abline(0, 0)
+
+boxplot(E ~ sucrose$batch, main = "Batch")
+abline(0, 0)
+
+boxplot(E ~ sucrose$treatment * sucrose$batch, main = "Treatment & Batch")
+abline(0, 0)
+
+boxplot(E ~ sucrose$colony_derived_from, main = "Colony")
+abline(0, 0)
+
+par(op)
 ```
 
-When you do this there looks to be more patterns in the residuals. Including batch makes residuals cluster more tightly around 0. Stick with M2a.lme. Including batch removed residual patterns, especially according to batchxtreatment combinations. 
+When you do this there looks to be more patterns in the residuals. Including batch makes residuals cluster more tightly around 0. Stick with M2a.lme. Including batch tackles residual patterns. 
 
 ```{r}
 summary(M2a.lme)
@@ -476,7 +506,6 @@ p1 <- ggplot(data = predictions, aes(x = Batch, y = Prediction, colour = as.fact
   scale_color_manual(values = c("#88CCEE", "#CC6677", "#DDCC77")) 
 
 p1
-
 ```
 
 ```{r}

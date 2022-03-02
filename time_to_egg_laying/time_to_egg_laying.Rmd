@@ -86,6 +86,9 @@ anova(cfit2, cfit3)
 cfit4 <- update(cfit2, .~. - treatment)
 anova(cfit2, cfit4)
 
+cfit5 <- update(cfit4, .~. - batch)
+anova(cfit4, cfit5)
+
 # just treatment
 summary(cfit3)
 ```
@@ -163,7 +166,6 @@ p
 
  dev.off()
 ```
-
 
 Two sources I used for below info 
 

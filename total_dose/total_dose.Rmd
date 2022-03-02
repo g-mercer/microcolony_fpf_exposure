@@ -41,17 +41,23 @@ sucrose$mass_consumed <- 0
 
 for (i in 1:nrow(sucrose)) {
   
-  if (sucrose$day [i] == 1) {sucrose$mass_consumed [i] <- sucrose$corrected_consumption [i] * 866.2034}
+  if (sucrose$day [i] == 1) {sucrose$mass_consumed [i] <- sucrose$corrected_consumption [i] *
+    866.2034}
   
-    if (sucrose$day [i] == 2) {sucrose$mass_consumed [i] <- sucrose$corrected_consumption [i] * 514.0244}
+    if (sucrose$day [i] == 2) {sucrose$mass_consumed [i] <- sucrose$corrected_consumption [i] *
+      514.0244}
   
-        if (sucrose$day [i] == 4) {sucrose$mass_consumed [i] <- sucrose$corrected_consumption [i] * 243.537}
+        if (sucrose$day [i] == 4) {sucrose$mass_consumed [i] <- sucrose$corrected_consumption [i] *
+          243.537}
   
-          if (sucrose$day [i] == 6) {sucrose$mass_consumed [i] <- sucrose$corrected_consumption [i] * 89.95134}
+          if (sucrose$day [i] == 6) {sucrose$mass_consumed [i] <- sucrose$corrected_consumption [i] *
+            89.95134}
   
-            if (sucrose$day [i] == 8) {sucrose$mass_consumed [i] <- sucrose$corrected_consumption [i] * 33.22388}
+            if (sucrose$day [i] == 8) {sucrose$mass_consumed [i] <- sucrose$corrected_consumption [i] *
+              33.22388}
   
-              if (sucrose$day [i] == 10) {sucrose$mass_consumed [i] <- sucrose$corrected_consumption [i] * 12.27137}
+              if (sucrose$day [i] == 10) {sucrose$mass_consumed [i] <- sucrose$corrected_consumption [i] *
+                12.27137}
 }
 
 mass_fpf_microcolony <- c()
@@ -159,3 +165,4 @@ LD50 is 67.9µg/bee. (5.5+4.86/4)/67.9 * 100 = 3.81% of LD50
 (mean_dose + mean_dose_pollen) / 4 / 67.9 * 100 
 ```
 
+Now calculate dose consumed per bee taking into account mortality. Similar to sucrose and pollen consumption calculations.

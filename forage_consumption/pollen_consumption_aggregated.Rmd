@@ -270,13 +270,13 @@ M1.gls.d <- update(M1.gls.b, .~. - batch)
 anova(M1.gls.b, M1.gls.d)
 ```
 
-Nothing is significant. Data exploration
+Nothing is significant. Graphical Model Validation
 
 ```{r}
 M1.gls.d <- update(M1.gls.d, method = "REML")
 
 # extract residuals
-E <- resid(M1.gls.d, type = "pearson")
+E <- resid(M1.gls.d, type = "normalized")
 
 # residuals vs fitted
 plot(M1.gls.d, which = c (1))
@@ -304,7 +304,7 @@ Are residual plots improved if batch is readded?
 M1.gls.b <- update(M1.gls.b, method = "REML")
 
 # extract residuals
-E <- resid(M1.gls.b, type = "pearson")
+E <- resid(M1.gls.b, type = "normalized")
 
 # residuals vs fitted
 plot(M1.gls.b, which = c (1))
@@ -333,7 +333,7 @@ M1.gls.b <- gls(corrected_consumption ~ batch + treatment, data = pollen, method
                 weights = varIdent(form =~ 1 | batch*treatment))
 
 # extract residuals
-E <- resid(M1.gls.b, type = "pearson")
+E <- resid(M1.gls.b, type = "normalized")
 
 # residuals vs fitted
 plot(M1.gls.b, which = c (1))
@@ -360,7 +360,7 @@ M1.gls.b <- gls(corrected_consumption ~ batch, data = pollen, method = "REML",
                 weights = varIdent(form =~ 1 | batch*treatment))
 
 # extract residuals
-E <- resid(M1.gls.b, type = "pearson")
+E <- resid(M1.gls.b, type = "normalized")
 
 # residuals vs fitted
 plot(M1.gls.b, which = c (1))
@@ -387,7 +387,7 @@ M1.gls.b <- gls(corrected_consumption ~ 1, data = pollen, method = "REML",
                 weights = varIdent(form =~ 1 | batch*treatment))
 
 # extract residuals
-E <- resid(M1.gls.b, type = "pearson")
+E <- resid(M1.gls.b, type = "normalized")
 
 # residuals vs fitted
 plot(M1.gls.b, which = c (1))

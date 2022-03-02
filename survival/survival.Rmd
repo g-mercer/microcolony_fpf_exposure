@@ -118,10 +118,9 @@ zph() checks for proportionality assumption, by using the Schoenfeld residuals a
 
 ```{r}
 # proportional hazards
-zp1 <- cox.zph(cfit3)
+zp1 <- cox.zph(cfit5)
 zp1
 
-plot(zp1[2], resid=FALSE)
 plot(zp1[1], resid=FALSE)
 ```
 

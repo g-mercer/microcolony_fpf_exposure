@@ -86,7 +86,6 @@ dotchart(brood$total_brood,
 ```
 
 No outliers. No treatment effect. Maybe a batch effect. Remember that batch 2 workers coincided with those that were in larval stage (I think) during transportation. 
-
 Start with beyond optimal Poisson GLM, extract residuals and plot against colony. Does this need to be a random effect? Plot residual vs fitted values. Patterns in spread may indicate overdispersion or wrong choice of distribution. 
 
 ```{r}
@@ -142,7 +141,7 @@ lrtest(M2, M1)
 
 Strong evidence for NB over P. 
 
-Fit NB GLMM with colony as random intercept based on the residual patterns for colony. Compare to NB GLM. Assume REML necessity is still required for finding optimal structure of random component. Therefore, refitted NB with REML and compared M2 to M3. Even if I don't specify REML the conclusion is the same, which is I should include colony as a random effect because it has a weak effect, yet significant effect, on brood size. 
+Fit NB GLMM with colony as random intercept based on the residual patterns for colony. Compare to NB GLM. Assume REML necessity is still required for finding optimal structure of random component. Therefore, refitted NB with REML and compared M2 to M3. Even if I don't specify REML the conclusion is the same, which is I should include colony as a random effect because it has a small effect, yet significant effect, on brood size. 
 
 ```{r}
 library(glmmTMB)
