@@ -542,11 +542,11 @@ p1 <- ggplot(data = predictions, aes(x = Batch, y = Prediction, colour = as.fact
   
   theme_bw() +
 
-  labs(y = "Average pollen Consumption per Bee per Microcolony", colour = "Batch") +
+  labs(y = "Average Pollen Consumption/Bee/Microcolony", colour = "Batch") +
     
   # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
     
-  ggtitle("Average pollen Consumption") +
+  ggtitle("Average Pollen Consumption") +
     
   theme(plot.title = element_text(hjust = 0.5), axis.title.x = element_blank()) +
   
@@ -573,11 +573,30 @@ p <- ggplot(pollen, aes(x=treatment, y=corrected_consumption, color = treatment)
   
   scale_color_manual(values = c("#117733", "#332288")) +
   
-  labs(y = "Average Pollen Consumption / Bee / Microcolony", colour = "Treatment") +
+  labs(y = "Average Pollen Consumption/Bee/Microcolony", colour = "Treatment") +
   
-  ggtitle("Average Pollen Consumption") +
+  ggtitle("Pollen Consumption") +
   
   theme(plot.title = element_text(hjust = 0.5), axis.title.x = element_blank())
 
 p
 ```
+
+```{r}
+cairo_pdf(file = "./output/pollen_consumption_batch.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+p1
+
+ dev.off()
+ 
+cairo_pdf(file = "./output/pollen_consumption_treatment.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+p
+
+ dev.off()
+```
+

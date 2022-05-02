@@ -193,6 +193,7 @@ anova(M1.lmeC, M1.lmeD)
 # add back in treatment as I am interested in its effect, or lack of. Model validation.
 M1.lmeE <- lme(male_mass_mg ~ 1 + treatment,
                data = male_mass_df,
+               weights = varIdent(form = ~ 1 | treatment * batch),
                random = ~ 1 | colony_number/microcolony_number, method = "ML")
 
 plot(M1.lmeE, col = 1)
@@ -201,6 +202,9 @@ plot(M1.lmeE, col = 1)
 M1.lmeE <- update(M1.lmeE, method = "REML")
 
 summary(M1.lmeE)
+
+# report this p value. When treatment only model is compared to intercept
+anova(M1.lmeE, M1.lmeD)
 ```
 
 Visualisations
@@ -290,11 +294,11 @@ p1 <- ggplot(data = M1.lmer.df, aes(x = treatment, y = prediction, colour = as.f
   
   theme_bw() +
 
-  labs(y = "male Mass (mg)", colour = "Treatment") +
+  labs(y = "Male Mass (mg)", colour = "Treatment") +
     
   #theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
     
-  ggtitle("male Mass") +
+  ggtitle("Male Mass") +
     
   theme(plot.title = element_text(hjust = 0.5), axis.title.x = element_blank()) +
   

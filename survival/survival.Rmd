@@ -162,11 +162,14 @@ p2 <- ggsurvplot(fit3,
                 data = workers,
                 conf.int = TRUE,
                 palette = c("#117733", "#332288"),
-                # legend.labs = c("Control", "fpf-pure"),
+                legend.labs = c("Control", "fpf-pure"),
+                title = "Worker Survival",
                 xlab = "Time (days)",
                 ylab = "Probability of Survival",
                 legend = c(0.8, 0.3),
-                legend.title = "")
+                legend.title = "",
+                ggtheme = theme_minimal() + theme(plot.title = element_text(hjust = 0.5))
+)
 
 p2
 ```
