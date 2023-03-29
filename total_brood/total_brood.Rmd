@@ -367,7 +367,19 @@ p <- ggplot(brood, aes(x=treatment, y=total_brood, color = treatment)) +
   
   ggtitle("Total Brood") +
   
-  theme(plot.title = element_text(hjust = 0.5), axis.title.x = element_blank())
+  theme(plot.title = element_text(hjust = 0.5), axis.title.x = element_blank()) +
+  
+  theme(plot.title = element_text(hjust = 0.5, size = 36, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size=24, face = "bold"),
+        legend.position = "none", 
+        axis.text.x = element_text(size=24, color = "black", face = "bold"),
+        axis.text.y = element_text(color = "black"),
+        panel.grid = element_blank()) +
+  
+  annotate(geom = "text", x = 2.4, y = 25, label = "bolditalic('p')~bold('= 0.441')", fontface = 2, size = 6, parse = TRUE) +
+  
+  scale_x_discrete(labels = c("control", "pesticide"))
 
 p
 ```

@@ -71,7 +71,30 @@ M2 <- glmmTMB(number_of_males ~ treatment * batch,
 anova(M1,M2)
 ```
 
-Negative binomial is still overdispersed deviance = 281.8 / df.residuals = 58 = 4.85. A quasi-negative binomial option does not exist. 
+Negative binomial dispersion can be calculated using function below - needs adapting to fit this project as lifted from semi-field work when error was realised.
+
+```{r}
+library(glmmTMB)
+
+M3_TMB <- glmmTMB(male_num ~ treatment + camp_loc + rear_loc + wax_moth + workers + TTEL + TT6W + QCD + treatment:workers + treatment:TTEL + treatment:TT6W +
+                     treatment:camp_loc + treatment:wax_moth + camp_loc:workers,
+              data = male_num,
+              family = "nbinom2")
+
+summary(M3_TMB)
+
+M3_TMB_nbinom1 <- update(M3_TMB,family=nbinom1)
+M3_TMB_poisson <- update(M3_TMB,family=poisson)
+
+dispfun <- function(m) {
+    r <- residuals(m,type="pearson")
+    n <- df.residual(m)
+    dsq <- sum(r^2)
+    c(dsq=dsq,n=n,disp=dsq/n)
+}
+options(digits=2)
+sapply(list(pois=M3_TMB_poisson,nb2=M3_TMB,nb1=M3_TMB_nbinom1),dispfun)
+```
 
 Likelihood ratio test shows ZINB is an improvement on the ZIP.
 
@@ -348,11 +371,25 @@ p1 <- ggplot(data = predictions, aes(x = treatment, y = Prediction, colour = as.
     
   # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
     
-  ggtitle("Male Number") +
+  # ggtitle("Male Number") +
     
   theme(plot.title = element_text(hjust = 0.5), axis.title.x = element_blank()) +
   
-  scale_color_manual(values = c("#117733", "#332288")) 
+  scale_color_manual(values = c("#117733", "#332288")) +
+  
+  ggtitle("Male Number") +
+  
+  theme(plot.title = element_text(hjust = 0.5, size = 36, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size=24, face = "bold"),
+        legend.position = "none", 
+        axis.text.x = element_text(size=24, color = "black", face = "bold"),
+        axis.text.y = element_text(color = "black"),
+        panel.grid = element_blank()) +
+  
+  annotate(geom = "text", x = 2.4, y = 0, label = "bolditalic('p')~bold('= 0.976')", fontface = 2, size = 6, parse = TRUE) +
+  
+  scale_x_discrete(labels = c("control", "pesticide"))
 
 p1
 ```

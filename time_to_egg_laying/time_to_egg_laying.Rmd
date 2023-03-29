@@ -144,17 +144,22 @@ p <- ggsurvplot(fit2,
                 fun='event',
                 conf.int = TRUE,
                 palette = c("#117733", "#332288"),
-                legend.labs = c("Control", "fpf-pure"),
+                legend.labs = c("control", "pesticide"),
                 xlab = "Time (days)",
                 ylab = "Probability of Egg Laying",
-                legend = c(0.9, 0.5),
-                legend.title = "")
+                legend.title = "",
+                title = "Time To Egg Laying")
+
+
+p <- p + theme_survminer(font.main = c(24, "bold", "black"),
+                         font.x = c(18, "bold", "black"),
+                         font.y = c(18, "bold", "black"),
+                         font.tickslab = c(16, "plain", "black"),
+                         font.legend = c(16, "plain", "black"))
+
+p <- p$plot + theme(plot.title = element_text(hjust = 0.5, face = "bold")) + annotate(geom = "text", x = 14, y = 0.02, label = "bolditalic('p')~bold('= 0.841')", fontface = 2, size = 6, parse = TRUE)
 
 p
-
-# plot$plot +   scale_color_manual(values = c("#117733", "#332288")) 
-
-
 ```
 
 ```{r}

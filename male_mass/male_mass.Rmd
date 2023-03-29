@@ -198,13 +198,13 @@ M1.lmeE <- lme(male_mass_mg ~ 1 + treatment,
 
 plot(M1.lmeE, col = 1)
 
+# report this p value. When treatment only model is compared to intercept
+anova(M1.lmeE, M1.lmeD)
+
 # refit model with REML
 M1.lmeE <- update(M1.lmeE, method = "REML")
 
 summary(M1.lmeE)
-
-# report this p value. When treatment only model is compared to intercept
-anova(M1.lmeE, M1.lmeD)
 ```
 
 Visualisations
@@ -298,11 +298,25 @@ p1 <- ggplot(data = M1.lmer.df, aes(x = treatment, y = prediction, colour = as.f
     
   #theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
     
-  ggtitle("Male Mass") +
+  # ggtitle("Male Mass") +
     
   theme(plot.title = element_text(hjust = 0.5), axis.title.x = element_blank()) +
   
-  scale_color_manual(values = c("#117733", "#332288")) 
+  scale_color_manual(values = c("#117733", "#332288")) +
+  
+  ggtitle("Male Mass") +
+  
+  theme(plot.title = element_text(hjust = 0.5, size = 36, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size=24, face = "bold"),
+        legend.position = "none", 
+        axis.text.x = element_text(size=24, color = "black", face = "bold"),
+        axis.text.y = element_text(color = "black"),
+        panel.grid = element_blank()) +
+  
+  annotate(geom = "text", x = 2.4, y = 50, label = "bolditalic('p')~bold('= 0.723')", fontface = 2, size = 6, parse = TRUE) +
+  
+  scale_x_discrete(labels= c("control", "pesticide"))
 
 p1
 

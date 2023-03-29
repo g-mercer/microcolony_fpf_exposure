@@ -77,9 +77,9 @@ cfit2 <- coxme(Surv(days, death) ~ batch * treatment + (1 | colony/microcolony),
 AIC(cfit1, cfit2)
 
 # slight improvement
-anova(cfit2)
+anova(cfit1, cfit2)
 
-cfit3 <- update(cfit2, .~. - batch:treatment)
+cfit3 <- coxme(Surv(days, death) ~ batch + treatment + (1 | colony/microcolony), data=workers)
 
 anova(cfit2, cfit3)
 
@@ -96,14 +96,14 @@ summary(cfit2)
 summary(cfit3)
 
 # significance of batch and treatment if interaction term is omitted
-cfit4 <- update(cfit3, .~. - batch)
+cfit4 <- coxme(Surv(days, death) ~ treatment + (1 | colony/microcolony), data=workers)
 anova(cfit3, cfit4)
 
-cfit5 <- update(cfit3, .~. - treatment)
+cfit5 <- coxme(Surv(days, death) ~ batch + (1 | colony/microcolony), data=workers)
 anova(cfit3, cfit5)
 
 # cfit 5 reference
-cfit6 <- update(cfit5, .~. - batch)
+cfit6 <- coxme(Surv(days, death) ~ (1 | colony/microcolony), data=workers)
 anova(cfit6, cfit5)
 
 ```
@@ -162,14 +162,25 @@ p2 <- ggsurvplot(fit3,
                 data = workers,
                 conf.int = TRUE,
                 palette = c("#117733", "#332288"),
-                legend.labs = c("Control", "fpf-pure"),
-                title = "Worker Survival",
+                legend.labs = c("control", "pesticide"),
+                # title = "Worker Survival",
                 xlab = "Time (days)",
                 ylab = "Probability of Survival",
                 legend = c(0.8, 0.3),
                 legend.title = "",
-                ggtheme = theme_minimal() + theme(plot.title = element_text(hjust = 0.5))
-)
+                title = "Survival")
+
+p2
+
+
+p2 <- p2 + theme_survminer(font.main = c(24, "bold", "black"),
+                         font.x = c(18, "bold", "black"),
+                         font.y = c(18, "bold", "black"),
+                         font.tickslab = c(16, "plain", "black"),
+                         font.legend = c(16, "plain", "black"))
+
+p2 <- p2$plot + theme(plot.title = element_text(hjust = 0.5, face = "bold")) + annotate(geom = "text", x = 28, y = 0.02, label = "bolditalic('p')~bold('= 0.128')", fontface = 2, size = 6, parse = TRUE)
+
 
 p2
 ```

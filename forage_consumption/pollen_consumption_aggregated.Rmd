@@ -573,11 +573,19 @@ p <- ggplot(pollen, aes(x=treatment, y=corrected_consumption, color = treatment)
   
   scale_color_manual(values = c("#117733", "#332288")) +
   
-  labs(y = "Average Pollen Consumption/Bee/Microcolony", colour = "Treatment") +
+  labs(y = "Total Pollen Processed/Bee (mg)", colour = "Treatment") +
   
   ggtitle("Pollen Consumption") +
   
-  theme(plot.title = element_text(hjust = 0.5), axis.title.x = element_blank())
+  theme(plot.title = element_text(hjust = 0.5, size = 24, face = "bold"),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size=14, face = "bold"),
+        legend.position = "none", 
+        axis.text.x = element_text(size=18, color = "black"),
+        axis.text.y = element_text(color = "black"),
+        panel.grid = element_blank()) +
+  
+  annotate(geom = "text", x = 2.4, y = 150, label = "bolditalic('p')~bold('= 0.336')", fontface = 2, size = 6, parse = TRUE)
 
 p
 ```
