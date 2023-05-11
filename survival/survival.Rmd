@@ -102,13 +102,9 @@ anova(cfit3, cfit4)
 cfit5 <- coxme(Surv(days, death) ~ batch + (1 | colony/microcolony), data=workers)
 anova(cfit3, cfit5)
 
-# cfit 5 reference
-cfit6 <- coxme(Surv(days, death) ~ (1 | colony/microcolony), data=workers)
-anova(cfit6, cfit5)
-
 ```
 
-Batch has an effect. Treatment does not. 
+Batch has an effect. Treatment does not. Leave both in model as part of experimental design.
 
 The coefficients in a Cox regression relate to hazard; a positive coefficient indicates a worse prognosis and a negative coefficient indicates a protective effect of the variable with which it is associated.
 
@@ -118,7 +114,7 @@ zph() checks for proportionality assumption, by using the Schoenfeld residuals a
 
 ```{r}
 # proportional hazards
-zp1 <- cox.zph(cfit5)
+zp1 <- cox.zph(cfit3)
 zp1
 
 plot(zp1[1], resid=FALSE)
@@ -146,6 +142,8 @@ p <- ggsurvplot(fit1,
                 legend = c(0.8, 0.3),
                 legend.title = "")
 
+p
+
 p1 <- ggsurvplot(fit2,
                 data = workers,
                 conf.int = TRUE,
@@ -163,7 +161,6 @@ p2 <- ggsurvplot(fit3,
                 conf.int = TRUE,
                 palette = c("#117733", "#332288"),
                 legend.labs = c("control", "pesticide"),
-                # title = "Worker Survival",
                 xlab = "Time (days)",
                 ylab = "Probability of Survival",
                 legend = c(0.8, 0.3),
@@ -203,6 +200,95 @@ p1
  dev.off()
  
  cairo_pdf(file = "./survival_treatment_plot.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+p2
+
+ dev.off()
+```
+
+Instead of plotting Kaplan-Meier graphs plot the output of the Cox Proportional Hazards Model.
+
+```{r}
+# refit final model with coxph
+cphfit2 <- coxph(Surv(days, death) ~ treatment + batch, data=workers)
+
+plot(survfit(cphfit2, newdata=data.frame(treatment=c("control", "fpf-pure"),
+                                         batch=c("1", "1"))), 
+     conf.int = TRUE)
+
+fit2 <- survfit(cphfit2, newdata=data.frame(treatment=c("control", "fpf-pure"),
+                                         batch=c("1", "1")))
+
+fit3 <- survfit(cphfit2, newdata=data.frame(treatment=c("control"),
+                                         batch=c("1", "2", "3")))
+
+summary(cphfit2)
+```
+
+Coxph plot
+
+```{r}
+p1 <- ggsurvplot(fit2,
+                data = workers,
+                conf.int = TRUE,
+                palette = c("#117733", "#332288"),
+                legend.labs = c("Control", "Flupyradifurone"),
+                xlab = "Time (days)",
+                ylab = "Probability of Survival",
+                legend = c(0.8, 0.3),
+                legend.title = "",
+                title = "Survival",
+                ylim = c(0.8,1))
+
+p1 <- p1 + theme_survminer(font.main = c(24, "bold", "black"),
+                         font.x = c(18, "bold", "black"),
+                         font.y = c(18, "bold", "black"),
+                         font.tickslab = c(16, "plain", "black"),
+                         font.legend = c(16, "plain", "black"))
+
+p1 <- p1$plot + theme(plot.title = element_text(hjust = 0.5, face = "bold")) + annotate(geom = "text", x = 28, y = 0.805, label = "bolditalic('p')~bold('= 0.128')", fontface = 2, size = 6, parse = TRUE)
+
+p1
+```
+
+Now for Batch
+
+```{r}
+p2 <- ggsurvplot(fit3,
+                data = workers,
+                conf.int = TRUE,
+                palette = c("#88CCEE", "#CC6677", "#DDCC77"),
+                legend.labs = c("1", "2", "3"),
+                xlab = "Time (days)",
+                ylab = "Probability of Survival",
+                legend = c(0.8, 0.3),
+                legend.title = "",
+                title = "Survival",
+                ylim = c(0.5,1))
+
+p2 <- p2 + theme_survminer(font.main = c(24, "bold", "black"),
+                         font.x = c(18, "bold", "black"),
+                         font.y = c(18, "bold", "black"),
+                         font.tickslab = c(16, "plain", "black"),
+                         font.legend = c(16, "plain", "black"))
+
+p2 <- p2$plot + theme(plot.title = element_text(hjust = 0.5, face = "bold")) + annotate(geom = "text", x = 28, y = 0.505, label = "bolditalic('p')~bold('= 0.002')", fontface = 2, size = 6, parse = TRUE)
+
+p2
+```
+
+```{r}
+pdf(file = "./survival_batch_plot.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+p1
+
+ dev.off()
+ 
+pdf(file = "./survival_treatment_plot.pdf",   # The directory you want to save the file in
   width = 8, # The width of the plot in inches
   height = 6) # The height of the plot in inches
 

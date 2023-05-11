@@ -13,7 +13,7 @@ Follow the Zuur process.
 
 ```{r}
 # import curated data
-sucrose <- read.csv(file = "output/sucrose_consumption_corrected_long.csv", )
+sucrose <- read.csv(file = "output/sucrose_consumption_corrected_long.csv")
 
 pollen <- read.csv(file = "output/pollen_consumption_corrected_long.csv")
 ```

@@ -231,7 +231,6 @@ anova(M1.gls, M1b.gls)
 
 anova(M1.gls, M1a.gls)
 
-
 # no varIdent structure is a significant improvement
 ```
 
@@ -264,22 +263,18 @@ M1.gls.c <- update(M1.gls.a, .~. - batch)
 anova(M1.gls.a, M1.gls.b)
 anova(M1.gls.a, M1.gls.c)
 
-# round 3
-M1.gls.d <- update(M1.gls.b, .~. - batch)
-
-anova(M1.gls.b, M1.gls.d)
 ```
 
-Nothing is significant. Graphical Model Validation
+Nothing is significant. Leave in treatment and batch as part of expt design. Graphical Model Validation
 
 ```{r}
-M1.gls.d <- update(M1.gls.d, method = "REML")
+M1.gls.a <- update(M1.gls.a, method = "REML")
 
 # extract residuals
-E <- resid(M1.gls.d, type = "normalized")
+E <- resid(M1.gls.a, type = "normalized")
 
 # residuals vs fitted
-plot(M1.gls.d, which = c (1))
+plot(M1.gls.a, which = c (1))
 
 op <- par(mfrow = c(2, 2))
 
@@ -298,16 +293,20 @@ abline(0, 0)
 par(op)
 ```
 
-Are residual plots improved if batch is readded?
+The colony residual plot suggests that it should be a random effect. Add and see if it improves the plot.
 
 ```{r}
-M1.gls.b <- update(M1.gls.b, method = "REML")
+M1.lme.a <- lme(corrected_consumption ~ treatment + batch,
+               data = pollen,
+               random =~1 | colony_derived_from, method = "REML")
+
+# summary(M1.lme.a)
 
 # extract residuals
-E <- resid(M1.gls.b, type = "normalized")
+E <- resid(M1.lme.a , type = "response")
 
 # residuals vs fitted
-plot(M1.gls.b, which = c (1))
+plot(M1.lme.a , which = c (1))
 
 op <- par(mfrow = c(2, 2))
 
@@ -324,105 +323,24 @@ boxplot(E ~ pollen$colony_derived_from, main = "Colony")
 abline(0, 0)
 
 par(op)
+
 ```
 
-Yes. Now add variance structure
+residuals by colony are much better so include. Treatment * Batch plot is now not great. Add VarIdent structure.
 
 ```{r}
-M1.gls.b <- gls(corrected_consumption ~ batch + treatment, data = pollen, method = "REML",
-                weights = varIdent(form =~ 1 | batch*treatment))
-
-# extract residuals
-E <- resid(M1.gls.b, type = "normalized")
-
-# residuals vs fitted
-plot(M1.gls.b, which = c (1))
-
-op <- par(mfrow = c(2, 2))
-
-boxplot(E ~ pollen$treatment, main = "Treatment")
-abline(0, 0)
-
-boxplot(E ~ pollen$batch, main = "Batch")
-abline(0, 0)
-
-boxplot(E ~ pollen$treatment * pollen$batch, main = "Treatment & Batch")
-abline(0, 0)
-
-boxplot(E ~ pollen$colony_derived_from, main = "Colony")
-abline(0, 0)
-
-par(op)
-
-#########
-
-M1.gls.b <- gls(corrected_consumption ~ batch, data = pollen, method = "REML",
-                weights = varIdent(form =~ 1 | batch*treatment))
-
-# extract residuals
-E <- resid(M1.gls.b, type = "normalized")
-
-# residuals vs fitted
-plot(M1.gls.b, which = c (1))
-
-op <- par(mfrow = c(2, 2))
-
-boxplot(E ~ pollen$treatment, main = "Treatment")
-abline(0, 0)
-
-boxplot(E ~ pollen$batch, main = "Batch")
-abline(0, 0)
-
-boxplot(E ~ pollen$treatment * pollen$batch, main = "Treatment & Batch")
-abline(0, 0)
-
-boxplot(E ~ pollen$colony_derived_from, main = "Colony")
-abline(0, 0)
-
-par(op)
-
-###########
-
-M1.gls.b <- gls(corrected_consumption ~ 1, data = pollen, method = "REML",
-                weights = varIdent(form =~ 1 | batch*treatment))
-
-# extract residuals
-E <- resid(M1.gls.b, type = "normalized")
-
-# residuals vs fitted
-plot(M1.gls.b, which = c (1))
-
-op <- par(mfrow = c(2, 2))
-
-boxplot(E ~ pollen$treatment, main = "Treatment")
-abline(0, 0)
-
-boxplot(E ~ pollen$batch, main = "Batch")
-abline(0, 0)
-
-boxplot(E ~ pollen$treatment * pollen$batch, main = "Treatment & Batch")
-abline(0, 0)
-
-boxplot(E ~ pollen$colony_derived_from, main = "Colony")
-abline(0, 0)
-
-par(op)
-```
-
-Improvement again. Above shows how patterns begin to reemerge if batch is removed but not treatment. Now try and add colony as a random effect. 
-
-```{r}
-# variance structures
-M2a.lme <- lme(corrected_consumption ~ batch,
+M1.lme.a <- lme(corrected_consumption ~ treatment + batch,
                data = pollen,
                random =~1 | colony_derived_from, method = "REML",
                weights = varIdent(form =~ 1 | batch*treatment))
 
+# summary(M1.lme.a)
+
 # extract residuals
-E <- resid(M2a.lme, type = "pearson")
+E <- resid(M1.lme.a , type = "response")
 
 # residuals vs fitted
-plot(M2a.lme, which = c (1))
+plot(M1.lme.a , which = c (1))
 
 op <- par(mfrow = c(2, 2))
 
@@ -439,95 +357,114 @@ boxplot(E ~ pollen$colony_derived_from, main = "Colony")
 abline(0, 0)
 
 par(op)
+
 ```
 
-This reintroduces patterns into treatmentxbatch plot and heterogeneity. 
-
-It does not improve anything greatly. Adding batch back into the model was the key step. So although batch was not significant it was included in the model to improve the residual plots. It removed patterns in the residuals. A variance structure batchxtreatment varIdent was also added to tackle heterogeneity. 
+The VarIdent structure didn't help really. Go forward with no VarIdent.
 
 ```{r}
-M1.gls.b <- gls(corrected_consumption ~ batch, data = pollen, method = "REML",
-                weights = varIdent(form =~ 1 | batch*treatment))
-
-summary(M1.gls.b)
-
-M2a.lme <- lme(corrected_consumption ~ batch,
+M1.lme.a <- lme(corrected_consumption ~ treatment + batch,
                data = pollen,
-               random =~1 | colony_derived_from, method = "REML",
-               weights = varIdent(form =~ 1 | batch*treatment))
-
-summary(M2a.lme)
+               random =~1 | colony_derived_from, method = "REML")
 ```
 
-If it only allows for heterogeneity, we call it a generalised least squares (GLS) model. Summaries for models with and without random structure did not change anything in the coefficients drastically. 
+What are the p-values of treatment and batch
 
 ```{r}
-M1.gls.b <- gls(corrected_consumption ~ batch, data = pollen, method = "ML",
-                weights = varIdent(form =~ 1 | batch*treatment))
+M1.lme.a <- lme(corrected_consumption ~ treatment + batch,
+               data = pollen,
+               random =~1 | colony_derived_from, method = "ML")
 
-M1.gls.d <- update(M1.gls.b, .~. - batch)
+# round 2 
+M1.lme.b <- update(M1.lme.a, .~. - treatment)
+M1.lme.c <- update(M1.lme.a, .~. - batch)
 
-anova(M1.gls.b, M1.gls.d)
+anova(M1.lme.a, M1.lme.b)
+anova(M1.lme.a, M1.lme.c)
 ```
 
-Above shows batch is not significant (again).
-
-Visualisations. 
+Extract Predictions and SE for fixed effect component of model. 
 
 ```{r}
-M1.gls.b <- gls(corrected_consumption ~ batch, data = pollen, method = "REML",
-                weights = varIdent(form =~ 1 | batch*treatment))
-```
+M1.lme.a <- lme(corrected_consumption ~ treatment + batch,
+               data = pollen,
+               random =~1 | colony_derived_from, method = "REML")
 
-```{r}
-# batch 1
-pollen$batch <- relevel(pollen$batch, "1")
+# summary(M3a.lme.a)
 
-M1.gls.b <- gls(corrected_consumption ~ batch, data = pollen, method = "REML",
-                weights = varIdent(form =~ 1 | batch*treatment))
+newdat <- expand.grid(treatment=levels(pollen$treatment), batch=levels(pollen$batch))
 
-b1_ci <- intervals(M1.gls.b)
+newdat$pred <- predict(M1.lme.a, newdat, level = 0)
 
-# batch 2
-pollen$batch <- relevel(pollen$batch, "2")
+Designmat <- model.matrix(eval(eval(M1.lme.a$call$fixed)[-2]), newdat[-3])
 
-M1.gls.b <- gls(corrected_consumption ~ batch, data = pollen, method = "REML",
-                weights = varIdent(form =~ 1 | batch*treatment))
+predvar <- diag(Designmat %*% M1.lme.a$varFix %*% t(Designmat))
 
-b2_ci <- intervals(M1.gls.b)
+newdat$SE <- sqrt(predvar)
 
-# batch 3
-pollen$batch <- relevel(pollen$batch, "3")
+newdat$ci_lower <- newdat$pred - (1.96 * newdat$SE) # 1.96 or qt(1 - (0.05 / 2), n - 1)?
 
-M1.gls.b <- gls(corrected_consumption ~ batch, data = pollen, method = "REML",
-                weights = varIdent(form =~ 1 | batch*treatment))
-
-b3_ci <- intervals(M1.gls.b)
+newdat$ci_higher <- newdat$pred + (1.96 * newdat$SE) # 1.96 or qt(1 - (0.05 / 2), n - 1)?
 ```
 
 ```{r}
-# assemble dataframe
-row1 <- c(Batch="1", Prediction = b1_ci [[1]][4], ci_l = b1_ci [[1]][1], ci_h = b1_ci [[1]][7])
-row2 <- c(Batch="2", Prediction = b2_ci [[1]][4], ci_l = b2_ci [[1]][1], ci_h = b2_ci [[1]][7])
-row3 <- c(Batch="3", Prediction = b3_ci [[1]][4], ci_l = b3_ci [[1]][1], ci_h = b3_ci [[1]][7])
+batch_one_only <- newdat [newdat$batch == "1", ]
 
-predictions <- as.data.frame(rbind(row1, row2, row3))
-
-predictions$Prediction <- as.numeric(as.character(predictions$Prediction))
-predictions$ci_l <- as.numeric(as.character(predictions$ci_l))
-predictions$ci_h <- as.numeric(as.character(predictions$ci_h))
-```
-
-```{r}
 # ggplot
-p1 <- ggplot(data = predictions, aes(x = Batch, y = Prediction, colour = as.factor(Batch))) + 
+p1 <- ggplot(data = batch_one_only, aes(x = treatment, y = pred, colour = as.factor(treatment))) + 
   
   geom_point(position = position_dodge(width = 0.75), size = 3) +
   
-  geom_errorbar(aes(x = Batch,
-                    ymin = ci_l,
-                    ymax = ci_h,
-                    colour = as.factor(Batch)),
+  geom_errorbar(aes(x = treatment,
+                    ymin = ci_lower,
+                    ymax = ci_higher,
+                    colour = as.factor(treatment)),
+                position = position_dodge(width = 0.75),
+                width = 0.05, 
+                size = 0.8) +
+  
+  geom_point(data = pollen,
+             aes(x = treatment,
+                 y = corrected_consumption,
+                 colour = as.factor(treatment)),
+             alpha = 0.4,
+             position  = position_jitterdodge(),
+             show.legend = FALSE) +
+  
+  theme_bw() +
+
+  labs(y = "Average Pollen Consumption/Bee/Microcolony", colour = "Treatment") +
+    
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    
+  ggtitle("Average Pollen Consumption By Treatment") +
+    
+  theme(plot.title = element_text(hjust = 0.5), axis.title.x = element_blank()) +
+  
+  scale_color_manual(values = c("#117733", "#332288"), labels = c("Control", "Flupyradifurone")) +
+  
+  scale_x_discrete(labels=c("Control", "Flupyradifurone")) +
+  
+  annotate(geom = "text", x = 2.32, y = 145, label = "bolditalic('p')~bold('= 0.344')", fontface = 2, size = 6, parse = TRUE)
+
+
+p1
+
+```
+
+Now a batch plot for treatment=control
+
+```{r}
+control_only <- newdat [newdat$treatment == "control", ]
+
+p <- ggplot(data = control_only, aes(x = batch, y = pred, colour = as.factor(batch))) + 
+  
+  geom_point(position = position_dodge(width = 0.75), size = 3) +
+  
+  geom_errorbar(aes(x = batch,
+                    ymin = ci_lower,
+                    ymax = ci_higher,
+                    colour = as.factor(batch)),
                 position = position_dodge(width = 0.75),
                 width = 0.05, 
                 size = 0.8) +
@@ -546,65 +483,37 @@ p1 <- ggplot(data = predictions, aes(x = Batch, y = Prediction, colour = as.fact
     
   # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
     
-  ggtitle("Average Pollen Consumption") +
+  ggtitle("Average Pollen Consumption By Batch") +
     
   theme(plot.title = element_text(hjust = 0.5), axis.title.x = element_blank()) +
   
-  scale_color_manual(values = c("#88CCEE", "#CC6677", "#DDCC77")) 
+  scale_color_manual(values = c("#88CCEE", "#CC6677", "#DDCC77")) +
 
-p1
-
-```
-
-```{r}
-p <- ggplot(pollen, aes(x=treatment, y=corrected_consumption, color = treatment)) + 
-  
-  geom_boxplot(outlier.shape=8) +
-
-  geom_point(data = pollen,
-             aes(x = treatment,
-                 y = corrected_consumption,
-                 colour = as.factor(treatment)),
-             alpha = 0.4,
-             position  = position_jitterdodge(),
-             show.legend = FALSE) +
-  
-  theme_bw() +
-  
-  scale_color_manual(values = c("#117733", "#332288")) +
-  
-  labs(y = "Total Pollen Processed/Bee (mg)", colour = "Treatment") +
-  
-  ggtitle("Pollen Consumption") +
-  
-  theme(plot.title = element_text(hjust = 0.5, size = 24, face = "bold"),
-        axis.title.x = element_blank(),
-        axis.title.y = element_text(size=14, face = "bold"),
-        legend.position = "none", 
-        axis.text.x = element_text(size=18, color = "black"),
-        axis.text.y = element_text(color = "black"),
-        panel.grid = element_blank()) +
-  
-  annotate(geom = "text", x = 2.4, y = 150, label = "bolditalic('p')~bold('= 0.336')", fontface = 2, size = 6, parse = TRUE)
+  annotate(geom = "text", x = 3.25, y = 115, label = "bolditalic('p')~bold('= 0.072')", fontface = 2, size = 6, parse = TRUE)
 
 p
 ```
 
+
 ```{r}
-cairo_pdf(file = "./output/pollen_consumption_batch.pdf",   # The directory you want to save the file in
+pdf(file = "./output/pollen_consumption_batch.pdf",   # The directory you want to save the file in
   width = 8, # The width of the plot in inches
   height = 6) # The height of the plot in inches
 
-p1
+p
 
  dev.off()
  
-cairo_pdf(file = "./output/pollen_consumption_treatment.pdf",   # The directory you want to save the file in
+pdf(file = "./output/pollen_consumption_treatment.pdf",   # The directory you want to save the file in
   width = 8, # The width of the plot in inches
   height = 6) # The height of the plot in inches
 
-p
+p1
 
  dev.off()
+```
+
+```{r}
+
 ```
 

@@ -263,27 +263,25 @@ M1.gls.c <- update(M1.gls.a, .~. - batch)
 anova(M1.gls.a, M1.gls.b)
 anova(M1.gls.a, M1.gls.c)
 
-# round 3
-M1.gls.d <- update(M1.gls.b, .~. - batch)
-
-anova(M1.gls.b, M1.gls.d)
 ```
 
 Manually only batch has an effect. Refit with REML and look at validation plots. Zuur has a value of 0.04 in one of his examples and states in a series of hypothesis tests it is hardly convincing.  Page 113 of pdf document and page 297 with example of 0.026. Are the p values from the above approximate? Considering multiple hypothesis testing batch is questionable. Retain for now.
 
+**All this is immaterial as treatment and batch are both part of the experimental design.**
+
 ```{r}
 # refit with REML
-M1.gls.b <- update(M1.gls.b, method = "REML")
+M1.gls.a <- update(M1.gls.a, method = "REML")
 
-summary(M1.gls.b)
+summary(M1.gls.a)
 ```
 
 ```{r}
 # extract residuals
-E <- resid(M1.gls.b, type = "pearson")
+E <- resid(M1.gls.a, type = "pearson")
 
 # residuals vs fitted
-plot(M1.gls.b, which = c (1))
+plot(M1.gls.a, which = c (1))
 
 op <- par(mfrow = c(2, 2))
 
@@ -306,7 +304,7 @@ As there are still patterns of heterogeneity for batch and colony. Add random an
 
 ```{r}
 # variance structures
-M2a.lme <- lme(corrected_consumption ~ batch,
+M2a.lme <- lme(corrected_consumption ~ batch + treatment,
                data = sucrose,
                random =~1 | colony_derived_from, method = "REML",
                weights = varIdent(form =~ 1 | batch*treatment))
@@ -355,132 +353,102 @@ M3a.lme.c <- update(M3a.lme.a, .~. - batch)
 anova(M3a.lme.a, M3a.lme.b)
 anova(M3a.lme.a, M3a.lme.c)
 
-# round 3
-M3a.lme.d <- update(M3a.lme.b, .~. - batch)
-
-anova(M3a.lme.b, M3a.lme.d)
 ```
 
-Above shows that when model selection of fixed effects is rerun with random and variance structures added during graphical model validation step batch ceases to be significant. 
+Adding in the random and variance structures, which are both required for heterogeneity, means nothing is significant.
 
-This would leave us with an intercept only model.
+M3a.lme.a final model. Interaction term was not significant.
+
+Standard error extracted using these sources
+
+[ref 1](https://stat.ethz.ch/pipermail/r-sig-mixed-models/2012q1/017530.html)
+[ref 2](https://stackoverflow.com/questions/14358811/extract-prediction-band-from-lme-fit)
+
+Only based on fixed component of the model.
 
 ```{r}
-# intercept only
-M3a.lme.d <- update(M3a.lme.d, method = "REML")
-
-# extract residuals
-E <- resid(M3a.lme.d, type = "normalized")
-
-# residuals vs fitted
-plot(M3a.lme.d, which = c (1))
-
-op <- par(mfrow = c(2, 2))
-
-boxplot(E ~ sucrose$treatment, main = "Treatment")
-abline(0, 0)
-
-boxplot(E ~ sucrose$batch, main = "Batch")
-abline(0, 0)
-
-boxplot(E ~ sucrose$treatment * sucrose$batch, main = "Treatment & Batch")
-abline(0, 0)
-
-boxplot(E ~ sucrose$colony_derived_from, main = "Colony")
-abline(0, 0)
-
-par(op)
-
-# compare to 
-M2a.lme <- lme(corrected_consumption ~ batch,
+M3a.lme.a <- lme(corrected_consumption ~ batch + treatment,
                data = sucrose,
                random =~1 | colony_derived_from, method = "REML",
                weights = varIdent(form =~ 1 | batch*treatment))
 
-# extract residuals
-E <- resid(M2a.lme, type = "normalized")
+# summary(M3a.lme.a)
 
-# residuals vs fitted
-plot(M2a.lme, which = c (1))
+newdat <- expand.grid(treatment=levels(sucrose$treatment), batch=levels(sucrose$batch))
 
-op <- par(mfrow = c(2, 2))
+newdat$pred <- predict(M3a.lme.a, newdat, level = 0)
 
-boxplot(E ~ sucrose$treatment, main = "Treatment")
-abline(0, 0)
+Designmat <- model.matrix(eval(eval(M3a.lme.a$call$fixed)[-2]), newdat[-3])
 
-boxplot(E ~ sucrose$batch, main = "Batch")
-abline(0, 0)
+predvar <- diag(Designmat %*% M3a.lme.a$varFix %*% t(Designmat))
 
-boxplot(E ~ sucrose$treatment * sucrose$batch, main = "Treatment & Batch")
-abline(0, 0)
+newdat$SE <- sqrt(predvar)
 
-boxplot(E ~ sucrose$colony_derived_from, main = "Colony")
-abline(0, 0)
+newdat$ci_lower <- newdat$pred - (1.96 * newdat$SE) # 1.96 or qt(1 - (0.05 / 2), n - 1)?
 
-par(op)
+newdat$ci_higher <- newdat$pred + (1.96 * newdat$SE) # 1.96 or qt(1 - (0.05 / 2), n - 1)?
+
+batch_one_only <- newdat [newdat$batch == "1", ]
+
 ```
 
-When you do this there looks to be more patterns in the residuals. Including batch makes residuals cluster more tightly around 0. Stick with M2a.lme. Including batch tackles residual patterns. 
-
-```{r}
-summary(M2a.lme)
-```
-
-```{r}
-# batch 1
-sucrose$batch <- relevel(sucrose$batch, "1")
-
-M2a.lme <- lme(corrected_consumption ~ batch,
-               data = sucrose,
-               random =~1 | colony_derived_from, method = "REML",
-               weights = varIdent(form =~ 1 | batch*treatment))
-
-b1_ci <- intervals(M2a.lme)
-
-# batch 2
-sucrose$batch <- relevel(sucrose$batch, "2")
-
-M2a.lme <- lme(corrected_consumption ~ batch,
-               data = sucrose,
-               random =~1 | colony_derived_from, method = "REML",
-               weights = varIdent(form =~ 1 | batch*treatment))
-
-b2_ci <- intervals(M2a.lme)
-
-# batch 3
-sucrose$batch <- relevel(sucrose$batch, "3")
-
-M2a.lme <- lme(corrected_consumption ~ batch,
-               data = sucrose,
-               random =~1 | colony_derived_from, method = "REML",
-               weights = varIdent(form =~ 1 | batch*treatment))
-
-b3_ci <- intervals(M2a.lme)
-```
-
-```{r}
-# assemble dataframe
-row1 <- c(Batch="1", Prediction = b1_ci [[1]][4], ci_l = b1_ci [[1]][1], ci_h = b1_ci [[1]][7])
-row2 <- c(Batch="2", Prediction = b2_ci [[1]][4], ci_l = b2_ci [[1]][1], ci_h = b2_ci [[1]][7])
-row3 <- c(Batch="3", Prediction = b3_ci [[1]][4], ci_l = b3_ci [[1]][1], ci_h = b3_ci [[1]][7])
-
-predictions <- as.data.frame(rbind(row1, row2, row3))
-
-predictions$Prediction <- as.numeric(as.character(predictions$Prediction))
-predictions$ci_l <- as.numeric(as.character(predictions$ci_l))
-predictions$ci_h <- as.numeric(as.character(predictions$ci_h))
-```
+Treatment Plot
 
 ```{r}
 # ggplot
-p1 <- ggplot(data = predictions, aes(x = Batch, y = Prediction, colour = as.factor(Batch))) + 
+p1 <- ggplot(data = batch_one_only, aes(x = treatment, y = pred, colour = as.factor(treatment))) + 
   
   geom_point(position = position_dodge(width = 0.75), size = 3) +
   
-  geom_errorbar(aes(x = Batch,
-                    ymin = ci_l,
-                    ymax = ci_h,
-                    colour = as.factor(Batch)),
+  geom_errorbar(aes(x = treatment,
+                    ymin = ci_lower,
+                    ymax = ci_higher,
+                    colour = as.factor(treatment)),
+                position = position_dodge(width = 0.75),
+                width = 0.05, 
+                size = 0.8) +
+  
+  geom_point(data = sucrose,
+             aes(x = treatment,
+                 y = corrected_consumption,
+                 colour = as.factor(treatment)),
+             alpha = 0.4,
+             position  = position_jitterdodge(),
+             show.legend = FALSE) +
+  
+  theme_bw() +
+
+  labs(y = "Average Sucrose Consumption/Bee/Microcolony", colour = "Treatment") +
+    
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    
+  ggtitle("Average Sucrose Consumption By Treatment") +
+    
+  theme(plot.title = element_text(hjust = 0.5), axis.title.x = element_blank()) +
+  
+  scale_color_manual(values = c("#117733", "#332288"), labels = c("Control", "Flupyradifurone")) +
+  
+  scale_x_discrete(labels=c("Control", "Flupyradifurone")) +
+  
+  annotate(geom = "text", x = 2.32, y = 4100, label = "bolditalic('p')~bold('= 0.248')", fontface = 2, size = 6, parse = TRUE)
+
+
+p1
+```
+
+Now a batch plot for treatment=control
+
+```{r}
+control_only <- newdat [newdat$treatment == "control", ]
+
+p <- ggplot(data = control_only, aes(x = batch, y = pred, colour = as.factor(batch))) + 
+  
+  geom_point(position = position_dodge(width = 0.75), size = 3) +
+  
+  geom_errorbar(aes(x = batch,
+                    ymin = ci_lower,
+                    ymax = ci_higher,
+                    colour = as.factor(batch)),
                 position = position_dodge(width = 0.75),
                 width = 0.05, 
                 size = 0.8) +
@@ -499,79 +467,31 @@ p1 <- ggplot(data = predictions, aes(x = Batch, y = Prediction, colour = as.fact
     
   # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
     
-  ggtitle("Average Sucrose Consumption") +
+  ggtitle("Average Sucrose Consumption By Batch") +
     
   theme(plot.title = element_text(hjust = 0.5), axis.title.x = element_blank()) +
   
-  scale_color_manual(values = c("#88CCEE", "#CC6677", "#DDCC77")) 
+  scale_color_manual(values = c("#88CCEE", "#CC6677", "#DDCC77")) +
 
-p1
-```
-
-```{r}
-# batch 1
-sucrose$batch <- relevel(sucrose$batch, "1")
-
-M2a.lme <- lme(corrected_consumption ~ batch,
-               data = sucrose,
-               random =~1 | colony_derived_from, method = "REML",
-               weights = varIdent(form =~ 1 | batch*treatment))
-
-summary(M2a.lme)
-```
-
-Now a treatment boxplot. Was dropped from model so no predictions. Just the raw data. Plotted to show visually that there was no effect. 
-
-```{r}
-p <- ggplot(sucrose, aes(x=treatment, y=corrected_consumption, color = treatment)) + 
-  
-  geom_boxplot(outlier.shape=8) +
-
-  geom_point(data = sucrose,
-             aes(x = treatment,
-                 y = corrected_consumption,
-                 colour = as.factor(treatment)),
-             alpha = 0.4,
-             position  = position_jitterdodge(),
-             show.legend = FALSE) +
-  
-  theme_bw() +
-  
-  scale_color_manual(values = c("#117733", "#332288")) +
-  
-  labs(y = "Total Sucrose Processed/Bee (mg)", colour = "Treatment") +
-  
-  ggtitle("Sucrose Consumption") +
-  
-  theme(plot.title = element_text(hjust = 0.5), axis.title.x = element_blank()) +
-  
-  theme(plot.title = element_text(hjust = 0.5, size = 24, face = "bold"),
-        axis.title.x = element_blank(),
-        axis.title.y = element_text(size=14, face = "bold"),
-        legend.position = "none", 
-        axis.text.x = element_text(size=18, color = "black"),
-        axis.text.y = element_text(color = "black"),
-        panel.grid = element_blank()) +
-  
-  annotate(geom = "text", x = 2.35, y = 4100, label = "bolditalic('p')~bold('= 0.0585')", fontface = 2, size = 6, parse = TRUE)
+  annotate(geom = "text", x = 3.25, y = 4100, label = "bolditalic('p')~bold('= 0.053')", fontface = 2, size = 6, parse = TRUE)
 
 p
 ```
 
 ```{r}
-cairo_pdf(file = "./output/sucrose_consumption_batch.pdf",   # The directory you want to save the file in
+pdf(file = "./output/sucrose_consumption_batch.pdf",   # The directory you want to save the file in
   width = 8, # The width of the plot in inches
   height = 6) # The height of the plot in inches
 
-p1
+p
 
  dev.off()
  
- cairo_pdf(file = "./output/sucrose_consumption_treatment.pdf",   # The directory you want to save the file in
+pdf(file = "./output/sucrose_consumption_treatment.pdf",   # The directory you want to save the file in
   width = 8, # The width of the plot in inches
   height = 6) # The height of the plot in inches
 
-p
+p1
 
  dev.off()
 ```

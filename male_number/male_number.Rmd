@@ -76,15 +76,13 @@ Negative binomial dispersion can be calculated using function below - needs adap
 ```{r}
 library(glmmTMB)
 
-M3_TMB <- glmmTMB(male_num ~ treatment + camp_loc + rear_loc + wax_moth + workers + TTEL + TT6W + QCD + treatment:workers + treatment:TTEL + treatment:TT6W +
-                     treatment:camp_loc + treatment:wax_moth + camp_loc:workers,
-              data = male_num,
+M_TMB_nbinom2 <- glmmTMB(number_of_males ~ treatment * batch,
+              data = males,
               family = "nbinom2")
 
-summary(M3_TMB)
 
-M3_TMB_nbinom1 <- update(M3_TMB,family=nbinom1)
-M3_TMB_poisson <- update(M3_TMB,family=poisson)
+M_TMB_nbinom1 <- update(M_TMB_nbinom2,family=nbinom1)
+M_TMB_poisson <- update(M_TMB_nbinom2,family=poisson)
 
 dispfun <- function(m) {
     r <- residuals(m,type="pearson")
@@ -93,7 +91,7 @@ dispfun <- function(m) {
     c(dsq=dsq,n=n,disp=dsq/n)
 }
 options(digits=2)
-sapply(list(pois=M3_TMB_poisson,nb2=M3_TMB,nb1=M3_TMB_nbinom1),dispfun)
+sapply(list(pois=M_TMB_poisson,nb2=M_TMB_nbinom2,nb1=M_TMB_nbinom1),dispfun)
 ```
 
 Likelihood ratio test shows ZINB is an improvement on the ZIP.
@@ -146,21 +144,21 @@ lrtest(M3, M4)
 anova(M3, M4)
 ```
 
-Here, if the testing the boundary correction is applicable it will take the p value under 0.05. Still approximate though and very close to threshold. Therefore, don't include colony as a random effect. 
-
-Or perform analysis twice, with colony and without colony and see if there are any differences (doubt it)
+Here, if the testing the boundary correction is applicable it will take the p value under 0.05. Also colony is part of the experimental design so include.
 
 ```{r}
 # with colony
 M5 <- glmmTMB(number_of_males ~ treatment * batch + (1 | colony),
               data = males,
               ziformula=~1,
-              family = "nbinom2")
+              family = "nbinom2",
+              REML = FALSE)
 
 M5a <- glmmTMB(number_of_males ~ treatment + batch + (1 | colony),
               data = males,
               ziformula=~1,
-              family = "nbinom2")
+              family = "nbinom2",
+              REML = FALSE)
 
 anova(M5, M5a)
 
@@ -170,7 +168,8 @@ anova(M5, M5a)
 M5b <- glmmTMB(number_of_males ~ treatment + (1 | colony),
               data = males,
               ziformula=~1,
-              family = "nbinom2")
+              family = "nbinom2",
+              REML = FALSE)
 
 anova(M5a, M5b)
 
@@ -178,61 +177,27 @@ anova(M5a, M5b)
 M5c <- glmmTMB(number_of_males ~ batch + (1 | colony),
               data = males,
               ziformula=~1,
-              family = "nbinom2")
+              family = "nbinom2",
+              REML = FALSE)
 
 anova(M5a, M5c)
+```
 
-# treatment least significant so remove. M5c reference
-M5d <- glmmTMB(number_of_males ~ 1 + (1 | colony),
+```{r}
+M5a <- glmmTMB(number_of_males ~ treatment + batch + (1 | colony),
               data = males,
               ziformula=~1,
-              family = "nbinom2")
+              family = "nbinom2",
+              REML = TRUE)
 
-anova(M5c, M5d)
-
-# batch not significant either. M5d final model. 
+summary(M5a)
 ```
 
-```{r}
-summary(M5d)
-```
-
-Let's do it again without colony as a random intercept. 
 
 ```{r}
-Zinb1a <- zeroinfl(number_of_males ~ treatment + batch | 1, dist = "negbin",
-                 link = "logit", data = males)
+ED1 <- resid(M5a, type = "pearson")
 
-lrtest(Zinb1, Zinb1a)
-
-# Zinb1a reference
-Zinb1b <- zeroinfl(number_of_males ~ treatment | 1, dist = "negbin",
-                 link = "logit", data = males)
-
-lrtest(Zinb1a, Zinb1b)
-
-Zinb1c <- zeroinfl(number_of_males ~ batch | 1, dist = "negbin",
-                 link = "logit", data = males)
-
-lrtest(Zinb1a, Zinb1c)
-
-# Zinb1c reference
-Zinb1d <- zeroinfl(number_of_males ~ 1 | 1, dist = "negbin",
-                 link = "logit", data = males)
-
-lrtest(Zinb1c, Zinb1d)
-```
-
-```{r}
-summary(Zinb1d)
-```
-
-Same conclusion that nothing is significant apart from the intercept. For simplicity remove colony as random effect. Model validation
-
-```{r}
-ED1 <- resid(Zinb1d, type = "pearson")
-
-mu <- predict(Zinb1d, type = "response")
+mu <- predict(M5a, type = "response")
 
 plot(x = mu, y = ED1, main = "Deviance residuals")
 
@@ -247,111 +212,38 @@ boxplot(ED1 ~ batch,
         ylab = "Residuals", data = males)
 ```
 
-For report, use these figures for batch, treatment and treatment:batch
+Extract Predictions and SE for fixed effect component of model. 
 
 ```{r}
-Zinb1a <- zeroinfl(number_of_males ~ treatment + batch | 1, dist = "negbin",
-                 link = "logit", data = males)
+newdat <- expand.grid(treatment=levels(males$treatment), batch=levels(males$batch), colony="1")
 
-lrtest(Zinb1, Zinb1a)
+newdat$pred <- unlist(predict(M5a, newdata = newdat, type = "link", re.form = NA, se.fit = TRUE) [1])
 
-Zinb1b <- zeroinfl(number_of_males ~ treatment | 1, dist = "negbin",
-                 link = "logit", data = males)
+newdat$SE <- unlist(predict(M5a, newdata = newdat, type = "link", re.form = NA, se.fit = TRUE) [2])
 
-Zinb1c <- zeroinfl(number_of_males ~ batch | 1, dist = "negbin",
-                 link = "logit", data = males)
+newdat$pred_resp <- exp(newdat$pred)
 
-Zinb1d <- zeroinfl(number_of_males ~ 1 | 1, dist = "negbin",
-                 link = "logit", data = males)
+newdat$ci_lower <- exp(newdat$pred - (1.96*newdat$SE))
 
-lrtest(Zinb1c, Zinb1d)
+newdat$ci_upper <- exp(newdat$pred + (1.96*newdat$SE))
 
-lrtest(Zinb1b, Zinb1d)
 ```
 
-Use this for colony
+Treatment plot for block 1
 
-```{r}
-M3 <- glmmTMB(number_of_males ~ treatment * batch,
-              data = males,
-              ziformula=~1,
-              family = "nbinom2",
-              REML = TRUE)
-
-
-M4 <- glmmTMB(number_of_males ~ treatment * batch + (1 | colony),
-              data = males,
-              ziformula=~1,
-              family = "nbinom2",
-              REML = TRUE)
-
-# again I don't understand why lrtest isn't performing boundary correction. Divide by 2
-# for random intercept vs no random intercept model. 
-lrtest(M3, M4)
-anova(M3, M4)
-```
- Refit with REML
- 
-```{r}
-M3 <- glmmTMB(number_of_males ~ 1,
-              data = males,
-              ziformula=~1,
-              family = "nbinom2",
-              REML = TRUE)
-
-summary(M3)
-```
- 
- Add treatment back in as that is what we are interested in. Want to show its lack of effect. 
- 
-```{r}
-males$treatment <- relevel(males$treatment, "control")
-M4 <- glmmTMB(number_of_males ~ 1 + treatment,
-              data = males,
-              ziformula=~1,
-              family = "nbinom2",
-              REML = TRUE)
-
-summary(M4)
-
-# control ci
-con_ci <- confint(M4)
-
-# fpf ci
-males$treatment <- relevel(males$treatment, "fpf-pure")
-
-M4 <- glmmTMB(number_of_males ~ 1 + treatment,
-              data = males,
-              ziformula=~1,
-              family = "nbinom2",
-              REML = TRUE)
-
-fpf_ci <- confint(M4)
-
-# assemble dataframe
-row1 <- c(treatment="control", Prediction = exp(con_ci [1,3]), ci_l = exp(con_ci [1,1]), ci_h = exp(con_ci [1,2]))
-
-
-row2 <- c(treatment="fpf-pure", Prediction = exp(fpf_ci [1,3]), ci_l = exp(fpf_ci [1,1]), ci_h = exp(fpf_ci [1,2]))
-
-predictions <- as.data.frame(rbind(row1, row2))
-
-predictions$Prediction <- as.numeric(as.character(predictions$Prediction))
-predictions$ci_l <- as.numeric(as.character(predictions$ci_l))
-predictions$ci_h <- as.numeric(as.character(predictions$ci_h))
-```
- 
 ```{r}
 library(tidyverse)
 
+batch_one_only <- newdat [newdat$batch == "1", ]
+
 # ggplot
-p1 <- ggplot(data = predictions, aes(x = treatment, y = Prediction, colour = as.factor(treatment))) + 
+p1 <- ggplot(data = batch_one_only, aes(x = treatment, y = pred_resp, colour = as.factor(treatment))) + 
   
   geom_point(position = position_dodge(width = 0.75), size = 3) +
   
   geom_errorbar(aes(x = treatment,
-                    ymin = ci_l,
-                    ymax = ci_h,
+                    ymin = ci_lower,
+                    ymax = ci_upper,
                     colour = as.factor(treatment)),
                 position = position_dodge(width = 0.75),
                 width = 0.05, 
@@ -387,25 +279,79 @@ p1 <- ggplot(data = predictions, aes(x = treatment, y = Prediction, colour = as.
         axis.text.y = element_text(color = "black"),
         panel.grid = element_blank()) +
   
-  annotate(geom = "text", x = 2.4, y = 0, label = "bolditalic('p')~bold('= 0.976')", fontface = 2, size = 6, parse = TRUE) +
+  annotate(geom = "text", x = 2.4, y = 0, label = "bolditalic('p')~bold('= 0.65')", fontface = 2, size = 6, parse = TRUE) +
   
-  scale_x_discrete(labels = c("control", "pesticide"))
+  scale_x_discrete(labels = c("Control", "Flupyradifurone"))
 
 p1
 ```
 
+Now for batch when treatment=control
+
 ```{r}
-cairo_pdf(file = "./treatment_boxplot.pdf",   # The directory you want to save the file in
+control_only <- newdat [newdat$treatment == "control", ]
+
+p <- ggplot(data = control_only, aes(x = batch, y = pred_resp, colour = as.factor(batch))) + 
+  
+  geom_point(position = position_dodge(width = 0.75), size = 3) +
+  
+  geom_errorbar(aes(x = batch,
+                    ymin = ci_lower,
+                    ymax = ci_upper,
+                    colour = as.factor(batch)),
+                position = position_dodge(width = 0.75),
+                width = 0.05, 
+                size = 0.8) +
+  
+  geom_point(data = males,
+             aes(x = batch,
+                 y = number_of_males,
+                 colour = as.factor(batch)),
+             alpha = 0.4,
+             position  = position_jitterdodge(),
+             show.legend = FALSE) +
+  
+  theme_bw() +
+
+  labs(y = "Number of Males", colour = "Batch") +
+    
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    
+  ggtitle("Male Number") +
+    
+  theme(plot.title = element_text(hjust = 0.5), axis.title.x = element_blank()) +
+  
+  scale_color_manual(values = c("#88CCEE", "#CC6677", "#DDCC77")) +
+
+  annotate(geom = "text", x = 3.4, y = 0, label = "bolditalic('p')~bold('= 0.59')", fontface = 2, size = 6, parse = TRUE) +
+  
+  scale_x_discrete(expand = c(0, 0.7))
+  
+p
+```
+
+
+
+```{r}
+pdf(file = "./treatment_boxplot.pdf",   # The directory you want to save the file in
   width = 8, # The width of the plot in inches
   height = 6) # The height of the plot in inches
 
 p1
 
  dev.off()
+ 
+ pdf(file = "./batch_boxplot.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+p
+
+ dev.off()
 ```
 
 
-Report the probability of false zeros is exp(-0.699220735) / 1 + exp(-0.699220735). This is 0.33. 
+Report the probability of false zeros is exp(-0.873) / 1 + exp(-0.873). This is 0.295. 
 
 Probabilities have to add to 1. The full range of outcomes is false zero, true zero and count. 
 
@@ -417,19 +363,20 @@ Probability that (yi > 0) = 1-P(false zero) x P(true count)
 
 so P(yi = 0) + P(yi > 0) = 1
 
-So for my data above where the mean for both groups is approximately 6. The probability of a 0 from a poisson with a mean of 6 is equal to e^-6, which is 0.25%. Therefore, the probability of a zero = 0.33 + (1-0.33)x0.0025 = 0.3317. 
+So for my data above where the mean for both groups is approximately 6. The probability of a 0 from a poisson with a mean of 6 is equal to e^-6, which is 0.25%. Therefore, the probability of a zero = 0.295 + (1-0.295)x0.0025 = 0.2966
 
-So if I calculate the probability of a false zero in terms of just the zeros  = 0.33/0.3317 = 0.995. 
+So if I calculate the probability of a false zero in terms of just the zeros  = 0.295/0.2966 = 0.995. 
 
 So basically all my zeros are false zeros. 
 
 The probability of false zeros therefore isn't showing the probability of a false zero in terms of just zeros, but in terms of of the whole data. 
 
-Therefore, if the mean of a poisson is 6 and my P(false zero) = 0.33, P(true zero) = (1-0.33)xe^-6) = 0.0017, P(yi > 0) = (1-0.33)xPr(Count Process)
+Therefore, if the mean of a poisson is 6 and my P(false zero) = 0.295, P(true zero) = (1-0.295)xe^-6) = 0.00175, P(yi > 0) = (1-0.295)xPr(Count Process)
 
-Pr(Count Process) = 1 - e^-6 = 0.9975 x (1-0.33) = 0.6683
+Pr(Count Process) = 1 - e^-6 = 0.9975 x (1-0.295) = 0.703
 
-Pr(total) = 0.33 + 0.0017 + 0.6683 = 1
+Pr(total) = 0.295 + 0.00175 + 0.703 = 1
 
+^^^ do this properly mean(males$number_of_males [males$number_of_males != "0"]) = 6.2
 
 Take home is the probability of false zeros is in terms of total probability, not only conditional on zero. 

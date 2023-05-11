@@ -37,7 +37,7 @@ egg_laying_df <- egg_laying_df [egg_laying_df$day != 0,]
 # remove sivanto rows
 egg_laying_df <- egg_laying_df [egg_laying_df$treatment != "sivanto",]
 
-egg_laying_df$treatment <- factor(egg_laying_df$treatment )
+egg_laying_df$treatment <- factor(egg_laying_df$treatment)
 
 # add event Y/N column
 egg_laying_df$laying_event <- 1
@@ -47,6 +47,7 @@ egg_laying_df$laying_event <- 1
 library(survival)
 library(coxme)
 
+# Kaplan-Meier approach
 fit1 <- survfit(Surv(day, laying_event) ~ batch + treatment, data=egg_laying_df)
 
 print(fit1)
@@ -77,25 +78,25 @@ legend(7, .5, c("treatment=control", "treatment=fpf-pure"),
 ```{r}
 cfit1 <- coxme(Surv(day, laying_event) ~ batch * treatment + (1 | colony), data=egg_laying_df)
 
+# drop
 cfit2 <- update(cfit1, .~. - batch:treatment)
 anova(cfit1, cfit2)
 
+# test significance of batch
 cfit3 <- update(cfit2, .~. - batch)
 anova(cfit2, cfit3)
 
+# test significance of treatment
 cfit4 <- update(cfit2, .~. - treatment)
 anova(cfit2, cfit4)
 
-cfit5 <- update(cfit4, .~. - batch)
-anova(cfit4, cfit5)
-
-# just treatment
-summary(cfit3)
+# treatment + batch
+summary(cfit2)
 ```
 
 ```{r}
 # proportional hazards
-zp1 <- cox.zph(cfit3)
+zp1 <- cox.zph(cfit2)
 zp1
 
 # plot(zp1[2])
@@ -106,28 +107,33 @@ Passes proportionality test.
 
 Neither batch or treatment had an effect on the hazards ratio for egg laying.  
 
-```{r}
-# cfit3 <- coxph(Surv(day, laying_event) ~ treatment, data=egg_laying_df)
-
-# plot(survfit(cfit3))
-
-# newdat <- with(egg_laying_df, 
-#                data.frame(
-#                  treatment = c("control", "fpf-pure")
-#                )
-# )
-
-# plot(survfit(cfit3, newdata = newdat), conf.int = TRUE, col = c("red", "blue"), fun='event')
-# legend(11, 0.2, 
-#        legend=c("control", "treatment"),
-#        lty = 1, 
-#        col = c("red", "blue"),
-#        text.col = c("red", "blue"))
-```
-
 The survival function S(t) is the probability of surviving until at least time t. It is essentially estimated by the number of patients alive at time t divided by the total number of study subjects remaining at that time.
 
 The survival function at the second death time, t(2) is equal to the estimated probability of not dying at time t(2) conditional on the individual being still at risk at time t(2). 
+
+```{r}
+# random effect term not significant. Justifies use of coxph, dropping of random effect.
+
+cfit1 <- coxme(Surv(day, laying_event) ~ batch * treatment + (1 | colony), data=egg_laying_df)
+
+cphfit1 <- coxph(Surv(day, laying_event) ~ batch * treatment, data=egg_laying_df)
+
+anova(cfit1, cphfit1)
+```
+
+```{r}
+# refit final model with coxph
+cphfit2 <- coxph(Surv(day, laying_event) ~ treatment + batch, data=egg_laying_df)
+
+plot(survfit(cphfit2, newdata=data.frame(treatment=c("control", "fpf-pure"),
+                                         batch=c("1", "1"))), 
+     conf.int = TRUE)
+
+fit2 <- survfit(cphfit2, newdata=data.frame(treatment=c("control", "fpf-pure"),
+                                         batch=c("1", "1")))
+
+summary(cphfit2)
+```
 
 ```{r}
 library(survminer)
@@ -144,7 +150,7 @@ p <- ggsurvplot(fit2,
                 fun='event',
                 conf.int = TRUE,
                 palette = c("#117733", "#332288"),
-                legend.labs = c("control", "pesticide"),
+                legend.labs = c("Control", "Flupyradifurone"),
                 xlab = "Time (days)",
                 ylab = "Probability of Egg Laying",
                 legend.title = "",
@@ -157,19 +163,19 @@ p <- p + theme_survminer(font.main = c(24, "bold", "black"),
                          font.tickslab = c(16, "plain", "black"),
                          font.legend = c(16, "plain", "black"))
 
-p <- p$plot + theme(plot.title = element_text(hjust = 0.5, face = "bold")) + annotate(geom = "text", x = 14, y = 0.02, label = "bolditalic('p')~bold('= 0.841')", fontface = 2, size = 6, parse = TRUE)
+p <- p$plot + theme(plot.title = element_text(hjust = 0.5, face = "bold")) + annotate(geom = "text", x = 14, y = 0.02, label = "bolditalic('p')~bold('= 0.829')", fontface = 2, size = 6, parse = TRUE)
 
 p
 ```
 
 ```{r}
-cairo_pdf(file = "./egg_laying_plot.pdf",   # The directory you want to save the file in
+pdf(file = "egg_laying_plot.pdf",   # The directory you want to save the file in
   width = 8, # The width of the plot in inches
   height = 6) # The height of the plot in inches
 
 p
 
- dev.off()
+dev.off()
 ```
 
 Two sources I used for below info 
@@ -203,3 +209,23 @@ Accounting for non-proportional hazards
 Include an interaction with time for the variables:
 This factors time out of the main effect
 Only use if it makes sense to have a linear interaction between the covariate and time (look at the graphs!)
+
+######################
+
+```{r}
+# ggcoxadjustedcurves(coxph1)
+egg_laying_forest_plot <- ggforest(cphfit2)
+
+pdf(file = "egg_laying_forest_plot.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+egg_laying_forest_plot
+
+dev.off()
+```
+
+```{r}
+
+```
+

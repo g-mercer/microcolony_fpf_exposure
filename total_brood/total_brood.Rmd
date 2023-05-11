@@ -217,37 +217,31 @@ M3c <- glmmTMB(total_brood ~ treatment + (1 | colony),
 
 anova(M3a, M3c)
 
-# treatment not significant. Dropped. M3b now reference
-M3d <- glmmTMB(total_brood ~ 1 + (1 | colony),
-              data = brood,
-              family = "nbinom2", 
-              REML = FALSE)
-
-anova(M3b, M3d)
-
-# batch significant so optimal model is M3b
+# batch and treatment can't be dropped as they are part of the experimental design
+# M3a final model
+# M3b and M3c test the overall significance of the variable.
 ```
 
-So batch is significant. A likelihood ratio test between a model including batch and the intercept and one containing only the intercept yielded a deviance of 12.085 and approximately follows a Chi-square distribution with 2 degree of freedom. Pr(>Chisq) = 0.002376
+So batch is significant. A likelihood ratio test between a model including batch, treatment and the intercept and one containing only treatment and the intercept yielded a deviance of 12.202 and approximately follows a Chi-square distribution with 2 degree of freedom. Pr(>Chisq) = 0.00224.
 
 Treatment was not significant.Pr(>Chisq) = 0.4407, deviance = 0.5945, approximately Chi-square distributed with 1 degree of freedom.
 
 ```{r}
 # refit with REML = TRUE
-M3b <- glmmTMB(total_brood ~ batch + (1 | colony),
+M3a <- glmmTMB(total_brood ~ batch + treatment + (1 | colony),
               data = brood,
               family = "nbinom2", 
               REML = TRUE)
 
-summary(M3b)
+summary(M3a)
 ```
 
 Variance and standard deviation of colony random effect both apply to it. Std.Dev^2 = Variance
 
 ```{r}
-ED4 <- resid(M3b, type = "pearson")
+ED4 <- resid(M3a, type = "pearson")
 
-mu <- predict(M3b, type = "response")
+mu <- predict(M3a, type = "response")
 
 plot(x = mu, y = ED4, main = "Pearson Residuals vs Fitted")
 
@@ -258,54 +252,49 @@ So Batch 2 had significantly smaller total brood sizes than the other two batche
 
 FPF pure had no effect on total brood size. 
 
+For batch
+
 ```{r}
-# extract CIs from model 
+brood$batch <- factor(brood$batch, levels = c("1", "2", "3"))
 
-# batch 1
-b1_ci <- confint(M3b)
-
-# batch 2
-brood$batch <- relevel(brood$batch, "2")
-
-M3b <- glmmTMB(total_brood ~ batch + (1 | colony),
+M3a <- glmmTMB(total_brood ~ batch + treatment + (1 | colony),
               data = brood,
               family = "nbinom2", 
               REML = TRUE)
 
-b2_ci <- confint(M3b)
 
-# batch 3
-brood$batch <- relevel(brood$batch, "3")
+summary(M3a)
 
-M3b <- glmmTMB(total_brood ~ batch + (1 | colony),
-              data = brood,
-              family = "nbinom2", 
-              REML = TRUE)
+newdata <- data_frame(treatment = "control",
+                      batch = c("1", "2", "3"),
+                      colony = "1")
 
-b3_ci <- confint(M3b)
+batch_predictions <- predict(M3a, newdata = newdata, type = "link", re.form = NA, se.fit = TRUE)
 
-# assemble dataframe
-row1 <- c(Batch="1", Prediction = exp(b1_ci [1,3]), ci_l = exp(b1_ci [1,1]), ci_h = exp(b1_ci [1,2]))
-row2 <- c(Batch="2", Prediction = exp(b2_ci [1,3]), ci_l = exp(b2_ci [1,1]), ci_h = exp(b2_ci [1,2]))
-row3 <- c(Batch="3", Prediction = exp(b3_ci [1,3]), ci_l = exp(b3_ci [1,1]), ci_h = exp(b3_ci [1,2]))
+batch_predictions_df <- cbind(newdata, batch_predictions [1], batch_predictions [2])
 
-predictions <- as.data.frame(rbind(row1, row2, row3))
+response_prediction <- exp(batch_predictions_df [4])
 
-predictions$Prediction <- as.numeric(as.character(predictions$Prediction))
-predictions$ci_l <- as.numeric(as.character(predictions$ci_l))
-predictions$ci_h <- as.numeric(as.character(predictions$ci_h))
+ci_upper <- exp(batch_predictions_df [4] + (1.96 * batch_predictions_df [5])) # is 1.96 appropriate or qt(1 - (0.05 / 2), n - 1)?
+
+ci_lower <- exp(batch_predictions_df [4] - (1.96 * batch_predictions_df [5])) # is 1.96 appropriate or qt(1 - (0.05 / 2), n - 1)?
+
+batch_predictions_df <- cbind(batch_predictions_df, response_prediction, ci_upper, ci_lower)
+
+colnames(batch_predictions_df) <- c("treatment", "batch", "colony", "link_fit", "link_se",
+                                    "response_fit", "ci_upper", "ci_lower")
 ```
 
 ```{r}
 # ggplot
-p1 <- ggplot(data = predictions, aes(x = Batch, y = Prediction, colour = as.factor(Batch))) + 
+p1 <- ggplot(data = batch_predictions_df, aes(x = batch, y = response_fit, colour = as.factor(batch))) + 
   
   geom_point(position = position_dodge(width = 0.75), size = 3) +
   
-  geom_errorbar(aes(x = Batch,
-                    ymin = ci_l,
-                    ymax = ci_h,
-                    colour = as.factor(Batch)),
+  geom_errorbar(aes(x = batch,
+                    ymin = ci_lower,
+                    ymax = ci_upper,
+                    colour = as.factor(batch)),
                 position = position_dodge(width = 0.75),
                 width = 0.05, 
                 size = 0.8) +
@@ -324,7 +313,7 @@ p1 <- ggplot(data = predictions, aes(x = Batch, y = Prediction, colour = as.fact
     
   # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
     
-  ggtitle("Total Brood") +
+  ggtitle("Total Brood by Batch") +
     
   theme(plot.title = element_text(hjust = 0.5), axis.title.x = element_blank()) +
   
@@ -335,7 +324,7 @@ p1
 ```
 
 ```{r}
-cairo_pdf(file = "./model_batch_predictions_boxplot.pdf",   # The directory you want to save the file in
+pdf(file = "./batch_brood.pdf",   # The directory you want to save the file in
   width = 8, # The width of the plot in inches
   height = 6) # The height of the plot in inches
 
@@ -344,13 +333,51 @@ p1
  dev.off()
 ```
 
-Now a treatment boxplot. Was dropped from model so no predictions. Just the raw data. Plotted to show visually that there was no effect. 
+For Treatment
 
 ```{r}
-p <- ggplot(brood, aes(x=treatment, y=total_brood, color = treatment)) + 
-  
-  geom_boxplot(outlier.shape=8) +
+M3a <- glmmTMB(total_brood ~ batch + treatment + (1 | colony),
+              data = brood,
+              family = "nbinom2", 
+              REML = TRUE)
 
+
+summary(M3a)
+
+newdata <- data_frame(treatment = c("control", "fpf-pure"),
+                      batch = "1",
+                      colony = "1")
+
+batch_predictions <- predict(M3a, newdata = newdata, type = "link", re.form = NA, se.fit = TRUE)
+
+batch_predictions_df <- cbind(newdata, batch_predictions [1], batch_predictions [2])
+
+response_prediction <- exp(batch_predictions_df [4])
+
+ci_upper <- exp(batch_predictions_df [4] + (1.96 * batch_predictions_df [5])) # 1.96 or qt(1 - (0.05 / 2), n - 1)?
+
+ci_lower <- exp(batch_predictions_df [4] - (1.96 * batch_predictions_df [5])) # 1.96 or qt(1 - (0.05 / 2), n - 1)?
+
+batch_predictions_df <- cbind(batch_predictions_df, response_prediction, ci_upper, ci_lower)
+
+colnames(batch_predictions_df) <- c("treatment", "batch", "colony", "link_fit", "link_se",
+                                    "response_fit", "ci_upper", "ci_lower")
+```
+
+```{r}
+# ggplot
+p <- ggplot(data = batch_predictions_df, aes(x = treatment, y = response_fit, colour = as.factor(treatment))) + 
+  
+  geom_point(position = position_dodge(width = 0.75), size = 3) +
+  
+  geom_errorbar(aes(x = treatment,
+                    ymin = ci_lower,
+                    ymax = ci_upper,
+                    colour = as.factor(treatment)),
+                position = position_dodge(width = 0.75),
+                width = 0.05, 
+                size = 0.8) +
+  
   geom_point(data = brood,
              aes(x = treatment,
                  y = total_brood,
@@ -360,37 +387,32 @@ p <- ggplot(brood, aes(x=treatment, y=total_brood, color = treatment)) +
              show.legend = FALSE) +
   
   theme_bw() +
-  
-  scale_color_manual(values = c("#117733", "#332288")) +
-  
-  labs(y = "Number of Brood", colour = "Treatment") +
-  
-  ggtitle("Total Brood") +
-  
+
+  labs(y = "Total Brood", colour = "Treatment") +
+    
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    
+  ggtitle("Total Brood by Treatment") +
+    
   theme(plot.title = element_text(hjust = 0.5), axis.title.x = element_blank()) +
   
-  theme(plot.title = element_text(hjust = 0.5, size = 36, face = "bold"),
-        axis.title.x = element_blank(),
-        axis.title.y = element_text(size=24, face = "bold"),
-        legend.position = "none", 
-        axis.text.x = element_text(size=24, color = "black", face = "bold"),
-        axis.text.y = element_text(color = "black"),
-        panel.grid = element_blank()) +
-  
-  annotate(geom = "text", x = 2.4, y = 25, label = "bolditalic('p')~bold('= 0.441')", fontface = 2, size = 6, parse = TRUE) +
-  
-  scale_x_discrete(labels = c("control", "pesticide"))
+  scale_color_manual(values = c("#117733", "#332288")) 
 
 p
+
 ```
 
 ```{r}
-cairo_pdf(file = "./treatment_boxplot.pdf",   # The directory you want to save the file in
+pdf(file = "./treatment_brood.pdf",   # The directory you want to save the file in
   width = 8, # The width of the plot in inches
   height = 6) # The height of the plot in inches
 
 p
 
  dev.off()
+```
+
+```{r}
+
 ```
 

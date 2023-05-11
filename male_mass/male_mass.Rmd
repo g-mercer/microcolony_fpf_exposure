@@ -90,7 +90,7 @@ drop1(M.lm, test = "F")
 plot(M.lm, which = c (1))
 ```
 
-Violation of homogeneity. Refit with gls and look at the residuals vs treatment, batch and treatment*batch. Also look at residuals vs microcolony. 
+Refit with gls and look at the residuals vs treatment, batch and treatment*batch. Also look at residuals vs microcolony. 
 
 ```{r}
 library(nlme)
@@ -114,7 +114,7 @@ boxplot(E ~ male_mass_df$microcolony_number, main = "Microcolony")
 abline(0, 0)
 ```
 
-The variance looks different for various treatment batch combinations. Also, for some microcolonies all the residuals are above or below 0, showing it should be included as an explanatory effect, in this case a random effect. 
+The variance looks slightly different for various treatment batch combinations. Also, for some microcolonies all the residuals are above or below 0, showing it should be included as an explanatory effect, in this case a random effect. 
 
 Fit varIdent variance structure and microcolony/colony as a random effect. 
 
@@ -154,7 +154,7 @@ First point of slight confusion. Slightly different approaches are taken when fi
 
 If, however, I had started with the variance structure and compared to M1.gls, the basic model, none of the the varIdent options (treatment*batch, batch, treatment) were improvements. This is another common approach Zuur takes. 
 
-I have looked at the residuals vs fitted for each model and residuals vs batchxtreatment and adding batchxtreatment variance structure does  seem to improve it. Therefore I am going to keep it.
+I have looked at the residuals vs fitted for each model and residuals vs batchxtreatment and adding batchxtreatment variance structure does seem to improve it (look at control.3). Therefore I am going to keep it.
 
 Continue with M1.lme. Model selection of fixed terms.
 
@@ -183,102 +183,56 @@ M1.lmeC <- update(M1.lmeA, .~. -treatment)
 
 anova(M1.lmeA, M1.lmeC)
 
-# dropped treatment
-M1.lmeD <- update(M1.lmeC, .~. -batch)
+# refit final model with REML
+M1.lmeA <- update(M1.lmeA, method = "REML")
 
-anova(M1.lmeC, M1.lmeD)
-
-# nothing left bar an intercept
-
-# add back in treatment as I am interested in its effect, or lack of. Model validation.
-M1.lmeE <- lme(male_mass_mg ~ 1 + treatment,
-               data = male_mass_df,
-               weights = varIdent(form = ~ 1 | treatment * batch),
-               random = ~ 1 | colony_number/microcolony_number, method = "ML")
-
-plot(M1.lmeE, col = 1)
-
-# report this p value. When treatment only model is compared to intercept
-anova(M1.lmeE, M1.lmeD)
-
-# refit model with REML
-M1.lmeE <- update(M1.lmeE, method = "REML")
-
-summary(M1.lmeE)
-```
-
-Visualisations
-
-```{r}
-boxplot(predict(M1.lmeE, level = 0, interval = confidence) ~ treatment, data = male_mass_df)
-```
-
-Refit with lmer to (more) easily get confidence intervals
-
-```{r}
-library(lme4)
-# https://stackoverflow.com/questions/11072544/how-to-get-coefficients-and-their-confidence-intervals-in-mixed-effects-models
-
-# bit of a nightmare returning the CIs. Have to specify model with lmer, run it, run confint, then relevel to get CIs for
-# other treatment level. 
-M1.lmer <- lmer(male_mass_mg ~ 1 + treatment + (1 | colony_number/microcolony_number), 
-                data = male_mass_df, REML = TRUE)
-
-M1.lmer.CI <- confint(M1.lmer)
-
-M1.lmer.coeff <- summary(M1.lmer)$coefficients
-
-control <- c(summary(M1.lmer)$coefficients [1], M1.lmer.CI [4, 1], M1.lmer.CI [4, 2])
-
-male_mass_df$treatment <- relevel(male_mass_df$treatment, "fpf-pure")
-
-M1.lmer <- lmer(male_mass_mg ~ 1 + treatment + (1 | colony_number/microcolony_number), 
-                data = male_mass_df, REML = TRUE)
-
-M1.lmer.CI <- confint(M1.lmer)
-
-M1.lmer.coeff <- summary(M1.lmer)$coefficients
-
-fpf_pure <- c(summary(M1.lmer)$coefficients [1], M1.lmer.CI [4, 1], M1.lmer.CI [4, 2])
-
-
-# use this for the visualisation plus the raw data. 
-M1.lmer.df <- data.frame(control, fpf_pure)
+summary(M1.lmeA)
 ```
 
 ```{r}
-# get df into right format
-M1.lmer.df <- t(M1.lmer.df)
-treatment <- c("control", "fpf-pure")
-M1.lmer.df <- cbind(M1.lmer.df, treatment)
-colnames(M1.lmer.df) <- c("prediction", "ci_l", "ci_h", "treatment")
-rownames(M1.lmer.df) <- c()
-M1.lmer.df <- as.data.frame(M1.lmer.df)
-M1.lmer.df$treatment <- as.factor(M1.lmer.df$treatment)
-M1.lmer.df$prediction <- as.numeric(as.character(M1.lmer.df$prediction))
-M1.lmer.df$ci_l <- as.numeric(as.character(M1.lmer.df$ci_l))
-M1.lmer.df$ci_h <- as.numeric(as.character(M1.lmer.df$ci_h))
+# looks fine
+plot(M1.lmeA , which = c (1))
+```
 
-# create df for adding p value to plot
-group1 <- "control"
-group2 <- "treatment"
-# summary(M1.lmeE) [20]
-p <- 6.792155e-01
-p.signif <- "ns"
-p_data <- as.data.frame(cbind(group1, group2, p , p.signif))
+Extract Predictions and SE for fixed effect component of model. 
+
+```{r}
+M1.lmeA <- lme(male_mass_mg ~ treatment + batch,
+              data = male_mass_df,
+              weights = varIdent(form = ~ 1 | treatment * batch),
+              random = ~ 1 | colony_number/microcolony_number, method = "REML")
+
+# summary(M1.lmeA)
+
+newdat <- expand.grid(treatment=levels(male_mass_df$treatment),
+                      batch=levels(male_mass_df$batch),
+                      colony_number = "1",
+                      microcolony_number = "1")
+
+newdat$pred <- predict(M1.lmeA, newdat, level = 0)
+
+Designmat <- model.matrix(eval(eval(M1.lmeA$call$fixed)[-2]), newdat[-3])
+
+predvar <- diag(Designmat %*% M1.lmeA$varFix %*% t(Designmat))
+
+newdat$SE <- sqrt(predvar)
+
+newdat$ci_lower <- newdat$pred - (1.96 * newdat$SE) # 1.96 or qt(1 - (0.05 / 2), n - 1)?
+
+newdat$ci_higher <- newdat$pred + (1.96 * newdat$SE) # 1.96 or qt(1 - (0.05 / 2), n - 1)?
 ```
 
 ```{r}
-# library(ggpubr)
+batch_one_only <- newdat [newdat$batch == "1", ]
 
 # ggplot
-p1 <- ggplot(data = M1.lmer.df, aes(x = treatment, y = prediction, colour = as.factor(treatment))) + 
+p1 <- ggplot(data = batch_one_only, aes(x = treatment, y = pred, colour = as.factor(treatment))) + 
   
   geom_point(position = position_dodge(width = 0.75), size = 3) +
   
   geom_errorbar(aes(x = treatment,
-                    ymin = ci_l,
-                    ymax = ci_h,
+                    ymin = ci_lower,
+                    ymax = ci_higher,
                     colour = as.factor(treatment)),
                 position = position_dodge(width = 0.75),
                 width = 0.05, 
@@ -288,7 +242,7 @@ p1 <- ggplot(data = M1.lmer.df, aes(x = treatment, y = prediction, colour = as.f
              aes(x = treatment,
                  y = male_mass_mg,
                  colour = as.factor(treatment)),
-             alpha = 0.25,
+             alpha = 0.4,
              position  = position_jitterdodge(),
              show.legend = FALSE) +
   
@@ -296,43 +250,69 @@ p1 <- ggplot(data = M1.lmer.df, aes(x = treatment, y = prediction, colour = as.f
 
   labs(y = "Male Mass (mg)", colour = "Treatment") +
     
-  #theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
     
-  # ggtitle("Male Mass") +
+  ggtitle("Male Mass By Treatment") +
     
   theme(plot.title = element_text(hjust = 0.5), axis.title.x = element_blank()) +
   
-  scale_color_manual(values = c("#117733", "#332288")) +
+  scale_color_manual(values = c("#117733", "#332288"), labels = c("Control", "Flupyradifurone")) +
   
-  ggtitle("Male Mass") +
+  scale_x_discrete(labels=c("Control", "Flupyradifurone")) +
   
-  theme(plot.title = element_text(hjust = 0.5, size = 36, face = "bold"),
-        axis.title.x = element_blank(),
-        axis.title.y = element_text(size=24, face = "bold"),
-        legend.position = "none", 
-        axis.text.x = element_text(size=24, color = "black", face = "bold"),
-        axis.text.y = element_text(color = "black"),
-        panel.grid = element_blank()) +
-  
-  annotate(geom = "text", x = 2.4, y = 50, label = "bolditalic('p')~bold('= 0.723')", fontface = 2, size = 6, parse = TRUE) +
-  
-  scale_x_discrete(labels= c("control", "pesticide"))
+  annotate(geom = "text", x = 2.35, y = 47, label = "bolditalic('p')~bold('= 0.699')", fontface = 2, size = 6, parse = TRUE)
+
 
 p1
 
-# can't install ggpubr because quantreg package is playing up add this to get p values when I can 
-# +
-# stat_pvalue_manual(p_data, 
-#                     y.position = 800, step.increase = 0.1,
-#                     label = "p.adj.signif",
-#                     size = 3,
-#                     hide.ns = TRUE)
-
 ```
 
+Now a batch plot for treatment=control
 
 ```{r}
-cairo_pdf(file = "./treatment_boxplot.pdf",   # The directory you want to save the file in
+control_only <- newdat [newdat$treatment == "control", ]
+
+p <- ggplot(data = control_only, aes(x = batch, y = pred, colour = as.factor(batch))) + 
+  
+  geom_point(position = position_dodge(width = 0.75), size = 3) +
+  
+  geom_errorbar(aes(x = batch,
+                    ymin = ci_lower,
+                    ymax = ci_higher,
+                    colour = as.factor(batch)),
+                position = position_dodge(width = 0.75),
+                width = 0.05, 
+                size = 0.8) +
+  
+  geom_point(data = male_mass_df,
+             aes(x = batch,
+                 y = male_mass_mg,
+                 colour = as.factor(batch)),
+             alpha = 0.4,
+             position  = position_jitterdodge(),
+             show.legend = FALSE) +
+  
+  theme_bw() +
+
+  labs(y = "Bee Mass (mg)", colour = "Batch") +
+    
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    
+  ggtitle("Bee Mass by Batch") +
+    
+  theme(plot.title = element_text(hjust = 0.5), axis.title.x = element_blank()) +
+  
+  scale_color_manual(values = c("#88CCEE", "#CC6677", "#DDCC77")) +
+
+  annotate(geom = "text", x = 3.35, y = 47, label = "bolditalic('p')~bold('= 0.659')", fontface = 2, size = 6, parse = TRUE) +
+  
+  scale_x_discrete(expand = c(0,0.7))
+
+p
+```
+
+```{r}
+pdf(file = "./treatment_boxplot.pdf",   # The directory you want to save the file in
   width = 8, # The width of the plot in inches
   height = 6) # The height of the plot in inches
 
@@ -341,3 +321,12 @@ p1
  dev.off()
 ```
 
+```{r}
+pdf(file = "./batch_boxplot.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+p
+
+ dev.off()
+```
