@@ -31,7 +31,114 @@ pollen
 
 Divide recorded value (g) by 1000 to get kg. Multiply recorded value by day concentration (µg/kg) to get µg of FPF consumed. 
 
+For pollen.
+
 ```{r}
+# SE function
+std_mean <- function(x) sd(x)/sqrt(length(x))
+
+# for pollen
+# only fpf MCs
+pollen <- pollen [pollen$treatment == "fpf-pure", ]
+
+pollen$corrected_consumption <- pollen$corrected_consumption/1000
+
+pollen$mass_consumed <- 0
+
+for (i in 1:nrow(pollen)) {
+  
+  if (pollen$day [i] == 1) {pollen$mass_consumed [i] <- pollen$corrected_consumption [i] * 19187.14}
+  
+    if (pollen$day [i] == 2) {pollen$mass_consumed [i] <- pollen$corrected_consumption [i] * 5033.175}
+  
+        if (pollen$day [i] == 4) {pollen$mass_consumed [i] <- pollen$corrected_consumption [i] * 689.9583}
+  
+          if (pollen$day [i] == 6) {pollen$mass_consumed [i] <- pollen$corrected_consumption [i] * 689.9583}
+  
+            if (pollen$day [i] == 8) {pollen$mass_consumed [i] <- pollen$corrected_consumption [i] * 689.9583}
+  
+              if (pollen$day [i] == 10) {pollen$mass_consumed [i] <- pollen$corrected_consumption [i] * 689.9583}
+}
+
+microcolony_numbers <- unique(pollen$microcolony_number)
+
+# Now calculate dose consumed per bee taking into account mortality.
+
+worker_number <- read.csv("input/number_of_workers_each_day.csv")
+
+# convert into long format
+day <- c("1", "2", "4", "6", "8", "10")
+
+worker_long <- tibble()
+
+for (i in 1:length(day)) {
+  
+  worker_temp <- worker_number [, c(1:5, 5+i)]
+  
+  worker_temp$day <- day [i]
+  
+  colnames(worker_temp) [6] <- "worker_number"
+  
+  worker_long <- rbind(worker_long, worker_temp)
+  
+}
+
+# create microcolony_day variable for worker_long and sucrose
+worker_long$mc_day <- paste0(worker_long$microcolony.number, "_", worker_long$day)
+
+pollen$mc_day <- paste0(pollen$microcolony_number, "_", pollen$day)
+
+# associate the worker number with the pollen dataframe. below says for each row of pollen df
+# scan each row of the worker_long df. if there is a match between the mc_day unique identifier
+# then put the worker number value for that row of worker_long into the matched row of pollen df
+pollen$worker_number <- 0
+
+for (i in 1:nrow(pollen)) {
+  
+  for (k in 1:nrow(worker_long)) {
+    
+      if (pollen$mc_day [i] == worker_long$mc_day [k]) {pollen$worker_number [i] <- worker_long$worker_number [k]}
+    
+  }
+}
+
+# divide corrected consumption values by number of bees present
+pollen$mass_consumed <- pollen$mass_consumed / pollen$worker_number
+
+mass_fpf_microcolony_filtered_pollen <- tibble()
+
+for (i in 1:length(microcolony_numbers)) {
+  
+  if (length(pollen$mass_consumed [pollen$microcolony_number == microcolony_numbers [i]]) == 6) 
+    
+  {
+    
+    filtered_mass_pollen <- cbind(sum(pollen$mass_consumed [pollen$microcolony_number == microcolony_numbers [i]]), microcolony_numbers [i])
+    
+    mass_fpf_microcolony_filtered_pollen <- rbind(mass_fpf_microcolony_filtered_pollen, filtered_mass_pollen)
+    
+    }
+
+}
+
+mean_dose_pollen <- mean(mass_fpf_microcolony_filtered_pollen [, 1])
+
+standard_error_dose_pollen <- std_mean(mass_fpf_microcolony_filtered_pollen [,1])
+
+standard_dev_dose_pollen <- sd(mass_fpf_microcolony_filtered_pollen [,1])
+
+# per microcolony
+mean_dose_pollen
+
+standard_error_dose_pollen
+
+standard_dev_dose_pollen
+```
+
+For sucrose
+
+```{r}
+# for sucrose
 # only fpf MCs
 sucrose <- sucrose [sucrose$treatment == "fpf-pure", ]
 
@@ -60,22 +167,52 @@ for (i in 1:nrow(sucrose)) {
                 12.27137}
 }
 
-mass_fpf_microcolony <- c()
-
 microcolony_numbers <- unique(sucrose$microcolony_number)
 
-for (i in 1:length(microcolony_numbers)) {
+# Now calculate dose consumed per bee taking into account mortality.
+
+worker_number <- read.csv("input/number_of_workers_each_day.csv")
+
+# convert into long format
+day <- c("1", "2", "4", "6", "8", "10")
+
+worker_long <- tibble()
+
+for (i in 1:length(day)) {
   
-  mass_fpf_microcolony [i] <- sum(sucrose$mass_consumed [sucrose$microcolony_number == microcolony_numbers [i]])
-
+  worker_temp <- worker_number [, c(1:5, 5+i)]
+  
+  worker_temp$day <- day [i]
+  
+  colnames(worker_temp) [6] <- "worker_number"
+  
+  worker_long <- rbind(worker_long, worker_temp)
+  
 }
-```
 
-```{r}
-# large variation due to spillages. Only use microcolonies where no spillages occurred. 
-library(tidyverse)
+# create microcolony_day variable for worker_long and sucrose
+worker_long$mc_day <- paste0(worker_long$microcolony.number, "_", worker_long$day)
 
-mass_fpf_microcolony_filtered <- tibble()
+sucrose$mc_day <- paste0(sucrose$microcolony_number, "_", sucrose$day)
+
+# associate the worker number with the sucrose dataframe. below says for each row of sucrose df
+# scan each row of the worker_long df. if there is a match between the mc_day unique identifier
+# then put the worker number value for that row of worker_long into the matched row of sucrose df
+sucrose$worker_number <- 0
+
+for (i in 1:nrow(sucrose)) {
+  
+  for (k in 1:nrow(worker_long)) {
+    
+      if (sucrose$mc_day [i] == worker_long$mc_day [k]) {sucrose$worker_number [i] <- worker_long$worker_number [k]}
+    
+  }
+}
+
+# divide corrected consumption values by number of bees present
+sucrose$mass_consumed <- sucrose$mass_consumed / sucrose$worker_number
+
+mass_fpf_microcolony_filtered_sucrose <- tibble()
 
 for (i in 1:length(microcolony_numbers)) {
   
@@ -83,86 +220,40 @@ for (i in 1:length(microcolony_numbers)) {
     
   {
     
-    filtered_mass <- cbind(sum(sucrose$mass_consumed [sucrose$microcolony_number == microcolony_numbers [i]]), microcolony_numbers [i])
+    filtered_mass_sucrose <- cbind(sum(sucrose$mass_consumed [sucrose$microcolony_number == microcolony_numbers [i]]), microcolony_numbers [i])
     
-    mass_fpf_microcolony_filtered <- rbind(mass_fpf_microcolony_filtered, filtered_mass)
-    
-    
-    }
-
-}
-
-mean_dose <- mean(mass_fpf_microcolony_filtered [, 1])
-
-std_mean <- function(x) sd(x)/sqrt(length(x))
-
-standard_error_dose <- std_mean(mass_fpf_microcolony_filtered [,1])
-
-# per microcolony
-mean_dose
-
-standard_error_dose
-
-```
-
-```{r}
-# for pollen
-# only fpf MCs
-pollen <- pollen [pollen$treatment == "fpf-pure", ]
-
-pollen$corrected_consumption <- pollen$corrected_consumption/1000
-
-pollen$mass_consumed <- 0
-
-for (i in 1:nrow(pollen)) {
-  
-  if (pollen$day [i] == 1) {pollen$mass_consumed [i] <- pollen$corrected_consumption [i] * 19187.14}
-  
-    if (pollen$day [i] == 2) {pollen$mass_consumed [i] <- pollen$corrected_consumption [i] * 5033.175}
-  
-        if (pollen$day [i] == 4) {pollen$mass_consumed [i] <- pollen$corrected_consumption [i] * 689.9583}
-  
-          if (pollen$day [i] == 6) {pollen$mass_consumed [i] <- pollen$corrected_consumption [i] * 689.9583}
-  
-            if (pollen$day [i] == 8) {pollen$mass_consumed [i] <- pollen$corrected_consumption [i] * 689.9583}
-  
-              if (pollen$day [i] == 10) {pollen$mass_consumed [i] <- pollen$corrected_consumption [i] * 689.9583}
-}
-
-microcolony_numbers <- unique(pollen$microcolony_number)
-```
-
-```{r}
-mass_fpf_microcolony_filtered_pollen <- tibble()
-
-for (i in 1:length(microcolony_numbers)) {
-  
-  if (length(pollen$mass_consumed [pollen$microcolony_number == microcolony_numbers [i]]) == 6) 
-    
-  {
-    
-    filtered_mass_pollen <- cbind(sum(pollen$mass_consumed [pollen$microcolony_number == microcolony_numbers [i]]), microcolony_numbers [i])
-    
-    mass_fpf_microcolony_filtered_pollen <- rbind(mass_fpf_microcolony_filtered_pollen, filtered_mass_pollen)
+    mass_fpf_microcolony_filtered_sucrose <- rbind(mass_fpf_microcolony_filtered_sucrose, filtered_mass_sucrose)
     
     }
 
 }
 
-mean_dose_pollen <- mean(mass_fpf_microcolony_filtered_pollen [, 1])
+mean_dose_sucrose <- mean(mass_fpf_microcolony_filtered_sucrose [, 1])
 
-standard_error_dose_pollen <- std_mean(mass_fpf_microcolony_filtered_pollen [,1])
+standard_error_dose_sucrose <- std_mean(mass_fpf_microcolony_filtered_sucrose [,1])
+
+standard_dev_dose_sucrose <- sd(mass_fpf_microcolony_filtered_sucrose [,1])
 
 # per microcolony
-mean_dose_pollen
+mean_dose_sucrose
 
-standard_error_dose_pollen 
+standard_error_dose_sucrose
+
+standard_dev_dose_sucrose
 ```
 
-LD50 is 67.9µg/bee. (5.5+4.86/4)/67.9 * 100 = 3.81% of LD50
+For both sucrose and pollen
 
 ```{r}
-(mean_dose + mean_dose_pollen) / 4 / 67.9 * 100 
+mass_fpf_microcolony_filtered_sucrose [,1] + mass_fpf_microcolony_filtered_pollen [,1]
+
+mean(mass_fpf_microcolony_filtered_sucrose [,1] + mass_fpf_microcolony_filtered_pollen [,1])
+
+sd(mass_fpf_microcolony_filtered_sucrose [,1] + mass_fpf_microcolony_filtered_pollen [,1])
 ```
 
-Now calculate dose consumed per bee taking into account mortality. Similar to sucrose and pollen consumption calculations.
+LD50 is 67.9µg/bee. (5.5+4.86/4)/67.9 * 100 = 3.83% of LD50
+
+```{r}
+(mean_dose_sucrose + mean_dose_pollen) / 67.9 * 100 
+```

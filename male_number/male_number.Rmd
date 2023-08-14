@@ -71,7 +71,7 @@ M2 <- glmmTMB(number_of_males ~ treatment * batch,
 anova(M1,M2)
 ```
 
-Negative binomial dispersion can be calculated using function below - needs adapting to fit this project as lifted from semi-field work when error was realised.
+Negative binomial dispersion can be calculated using function below.
 
 ```{r}
 library(glmmTMB)
@@ -90,7 +90,9 @@ dispfun <- function(m) {
     dsq <- sum(r^2)
     c(dsq=dsq,n=n,disp=dsq/n)
 }
+
 options(digits=2)
+
 sapply(list(pois=M_TMB_poisson,nb2=M_TMB_nbinom2,nb1=M_TMB_nbinom1),dispfun)
 ```
 
@@ -192,7 +194,6 @@ M5a <- glmmTMB(number_of_males ~ treatment + batch + (1 | colony),
 
 summary(M5a)
 ```
-
 
 ```{r}
 ED1 <- resid(M5a, type = "pearson")
@@ -377,6 +378,34 @@ Pr(Count Process) = 1 - e^-6 = 0.9975 x (1-0.295) = 0.703
 
 Pr(total) = 0.295 + 0.00175 + 0.703 = 1
 
-^^^ do this properly mean(males$number_of_males [males$number_of_males != "0"]) = 6.2
+^^^ do this properly below
 
-Take home is the probability of false zeros is in terms of total probability, not only conditional on zero. 
+Take home is the probability of false zeros is in terms of total probability, not only conditional on zero.
+
+Fit a model that shows the probability of a false zero in comparison to a true model. Only way I could think of the total mean being shown for the count process was to shift the fixed effects across to the random effects component. May be incorrect but it shows that the majority of zeros were false zeros.
+
+```{r}
+false_zeros_description_model <- glmmTMB(number_of_males ~ 1 + (1 | colony) + (1 | treatment) + (1 | batch),
+                                          data = males,
+                                          ziformula=~1,
+                                          family = "nbinom2",
+                                          REML = TRUE)
+
+summary(false_zeros_description_model)
+
+# probability of false zero
+p_false_zero <- exp(-0.876)/ (1 + exp(-0.876))
+
+# probability of anything but a false zero
+p_not_false_zero <- 1 - (exp(-0.876)/ (1 + exp(-0.876)))
+
+# probability of true zero
+p_true_zero <- dnbinom(x = 0, size = 5.63, mu = exp(1.576))
+
+p_not_true_zero <- 1 - dnbinom(x = 0, size = 5.63, mu = exp(1.576))
+
+# should = 1
+p_false_zero + (p_not_false_zero*p_true_zero) + (p_not_false_zero*p_not_true_zero)
+
+```
+

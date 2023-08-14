@@ -355,7 +355,7 @@ anova(M3a.lme.a, M3a.lme.c)
 
 ```
 
-Adding in the random and variance structures, which are both required for heterogeneity, means nothing is significant.
+Adding in the random and variance structures, which are both required for heterogeneity and due to experimental design, means nothing is significant.
 
 M3a.lme.a final model. Interaction term was not significant.
 

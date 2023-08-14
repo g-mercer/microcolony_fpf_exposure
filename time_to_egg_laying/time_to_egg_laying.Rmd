@@ -226,6 +226,8 @@ dev.off()
 ```
 
 ```{r}
+library(bookdown)
 
+knitr::write_bib(c(.packages(), "bookdown"), "packages.bib")
 ```
 

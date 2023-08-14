@@ -371,9 +371,15 @@ M1.lme.a <- lme(corrected_consumption ~ treatment + batch,
 What are the p-values of treatment and batch
 
 ```{r}
+M1.lme.int <- lme(corrected_consumption ~ treatment * batch,
+                  data = pollen,
+                  random =~1 | colony_derived_from, method = "ML")
+
 M1.lme.a <- lme(corrected_consumption ~ treatment + batch,
                data = pollen,
                random =~1 | colony_derived_from, method = "ML")
+
+anova(M1.lme.int, M1.lme.a)
 
 # round 2 
 M1.lme.b <- update(M1.lme.a, .~. - treatment)
@@ -390,7 +396,7 @@ M1.lme.a <- lme(corrected_consumption ~ treatment + batch,
                data = pollen,
                random =~1 | colony_derived_from, method = "REML")
 
-# summary(M3a.lme.a)
+# summary(M1.lme.a)
 
 newdat <- expand.grid(treatment=levels(pollen$treatment), batch=levels(pollen$batch))
 

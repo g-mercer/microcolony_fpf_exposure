@@ -94,6 +94,7 @@ Refit with gls and look at the residuals vs treatment, batch and treatment*batch
 
 ```{r}
 library(nlme)
+
 M1.gls <- gls(male_mass_mg ~ treatment * batch,
            data = male_mass_df)
 
@@ -202,7 +203,7 @@ M1.lmeA <- lme(male_mass_mg ~ treatment + batch,
               weights = varIdent(form = ~ 1 | treatment * batch),
               random = ~ 1 | colony_number/microcolony_number, method = "REML")
 
-# summary(M1.lmeA)
+summary(M1.lmeA)
 
 newdat <- expand.grid(treatment=levels(male_mass_df$treatment),
                       batch=levels(male_mass_df$batch),

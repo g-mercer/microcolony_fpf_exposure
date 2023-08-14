@@ -86,7 +86,7 @@ dotchart(brood$total_brood,
 ```
 
 No outliers. No treatment effect. Maybe a batch effect. Remember that batch 2 workers coincided with those that were in larval stage (I think) during transportation. 
-Start with beyond optimal Poisson GLM, extract residuals and plot against colony. Does this need to be a random effect? Plot residual vs fitted values. Patterns in spread may indicate overdispersion or wrong choice of distribution. 
+Start with beyond optimal Poisson GLM, extract residuals and plot against colony. Plot residual vs fitted values. Patterns in spread may indicate overdispersion or wrong choice of distribution. 
 
 ```{r}
 M1 <- glm(total_brood ~ treatment*batch, family = poisson, data = brood)
@@ -107,6 +107,7 @@ abline(0, 0)
 
 ```{r}
 library(MASS)
+
 M2 <- glm.nb(total_brood ~ treatment*batch, 
              link = "log", 
              data = brood)
@@ -141,7 +142,7 @@ lrtest(M2, M1)
 
 Strong evidence for NB over P. 
 
-Fit NB GLMM with colony as random intercept based on the residual patterns for colony. Compare to NB GLM. Assume REML necessity is still required for finding optimal structure of random component. Therefore, refitted NB with REML and compared M2 to M3. Even if I don't specify REML the conclusion is the same, which is I should include colony as a random effect because it has a small effect, yet significant effect, on brood size. 
+Fit NB GLMM with colony as random intercept based on the residual patterns for colony. Compare to NB GLM. Assume REML necessity is still required for finding optimal structure of random component. Therefore, refitted NB with REML and compared M2 to M3. Even if I don't specify REML the conclusion is the same, which is I should include colony as a random effect because it has a small effect, yet significant effect, on brood size. Also include as it is part of the experimental design.
 
 ```{r}
 library(glmmTMB)
@@ -202,7 +203,6 @@ M3a <- glmmTMB(total_brood ~ treatment + batch + (1 | colony),
 anova(M3, M3a)
 
 # treatment:batch not significant. Dropped. M3a now reference
-
 M3b <- glmmTMB(total_brood ~ batch + (1 | colony),
               data = brood,
               family = "nbinom2", 
@@ -411,8 +411,3 @@ p
 
  dev.off()
 ```
-
-```{r}
-
-```
-
