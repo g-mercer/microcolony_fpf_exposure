@@ -1,0 +1,2712 @@
+---
+title: "Aggregated Microcolony Markdown"
+author: "Guy Mercer"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+Fitness based endpoints first.
+
+--------------------------------------------------------------------------------
+
+Male Number
+
+Import data
+
+```{r}
+males <- read.csv("input/number_of_males.csv")
+
+males$batch <- as.factor(males$batch)
+males$colony <- as.factor(males$colony)
+males$treatment <- as.factor(males$treatment)
+
+males$number_of_males <- as.numeric(males$number_of_males)
+```
+
+Start with a frequency plot 
+
+```{r}
+plot(table(males$number_of_males))
+```
+
+Start with zero inflated poisson. Look at residuals vs fitted. Patterns? Compare to zero inflated NB with likelihood ratio test. Select appropriate. Patterns in residuals better? Plot against random effect variable. Move onto ZIGLMM using glmmTMB. Compare zero inflated model to zero inflated mixed model using a likelihood ratio test. Select appropriate. 
+
+At this stage I will have appropriate distribution and random effect structure. Next, perform fixed effect model selection. Complete and check residuals vs fitted and residuals against remaining explanatory variables. All ok? 
+
+```{r}
+boxplot(number_of_males ~ treatment,
+        varwidth = TRUE, xlab = "Treatment",
+        main = "Boxplot of male Number Conditional on Treatment", 
+        ylab = "Number of males", data = males)
+
+males$clevelandcode <- factor(
+ifelse(males$treatment == "control",
+1,
+2))
+
+males$clevelandcode <- as.numeric(males$clevelandcode)
+
+
+dotchart(males$number_of_males,
+         groups = factor(males$clevelandcode),
+         ylab = "Order of observations",
+         xlab = "male Number", main = "Cleveland dotplot", pch = males$clevelandcode)
+```
+
+No outliers. Heterogeneity looks similar between treatment groups too. 
+
+Fit ZIP. Only have an intercept for the binomial process as none of my covariates will explain the probability of false zeros. False zeros were equally likely due to the experiment being cut short. Compare to ZINB.
+
+```{r}
+library(glmmTMB)
+
+M1 <- glmmTMB(number_of_males ~ treatment * batch + (1 | colony),
+              data = males,
+              ziformula=~1,
+              family = poisson)
+
+M2 <- glmmTMB(number_of_males ~ treatment * batch + (1 | colony),
+              data = males,
+              ziformula=~1,
+              family = "nbinom2",)
+
+anova(M1,M2)
+```
+
+NB distribution better fit than poisson
+
+Model selection
+
+```{r}
+# with colony
+M5 <- glmmTMB(number_of_males ~ treatment * batch + (1 | colony),
+              data = males,
+              ziformula=~1,
+              family = "nbinom2",
+              REML = FALSE)
+
+M5a <- glmmTMB(number_of_males ~ treatment + batch + (1 | colony),
+              data = males,
+              ziformula=~1,
+              family = "nbinom2",
+              REML = FALSE)
+
+anova(M5, M5a)
+
+# removed interaction. M5a reference.
+
+# remove batch
+M5b <- glmmTMB(number_of_males ~ treatment + (1 | colony),
+              data = males,
+              ziformula=~1,
+              family = "nbinom2",
+              REML = FALSE)
+
+anova(M5a, M5b)
+
+# remove treatment
+M5c <- glmmTMB(number_of_males ~ batch + (1 | colony),
+              data = males,
+              ziformula=~1,
+              family = "nbinom2",
+              REML = FALSE)
+
+anova(M5a, M5c)
+```
+
+```{r}
+M5a <- glmmTMB(number_of_males ~ treatment + batch + (1 | colony),
+              data = males,
+              ziformula=~1,
+              family = "nbinom2",
+              REML = TRUE)
+
+summary(M5a)
+
+```
+
+```{r}
+library(gtsummary)
+
+# conditional section
+M5a_table_cond <- tbl_regression(
+    M5a, 
+    tidy_fun = function(...) broom.mixed::tidy(..., component = "cond"),
+    estimate_fun = purrr::partial(style_ratio, digits = 3),
+    pvalue_fun = purrr::partial(style_sigfig, digits = 3),
+    intercept = TRUE,
+    label = list(treatment ~ "Treatment", batch ~ "Batch"))
+
+# zi section
+M5a_table_zi <- tbl_regression(
+   M5a, 
+   tidy_fun = function(...) broom.mixed::tidy(..., component = "zi"),
+   estimate_fun = purrr::partial(style_ratio, digits = 3),
+   pvalue_fun = purrr::partial(style_sigfig, digits = 3),
+   intercept = TRUE)
+
+# stack them together
+tbl_stack(tbls = list(M5a_table_cond, M5a_table_zi), group_header = c("Count Process", "Binomial Process")) %>%
+  as_gt() %>%
+  gt::tab_style(
+    style = gt::cell_text(weight = "bold"),
+    locations = gt::cells_row_groups(groups = everything())
+  ) %>%
+  gt::tab_header(title = "Summary of mixed model for microcolony male production")
+
+# alternative styling
+M5a_summary_tab <- broom.mixed::tidy(x = M5a)
+
+M5a_summary_tab [6, 4] <- paste(M5a_summary_tab [6, 3], ".", M5a_summary_tab [6, 4], sep = "")
+
+M5a_summary_tab <- M5a_summary_tab [c(1:4, 6, 5), ]
+
+library(kableExtra)
+
+options(knitr.kable.NA = '_')
+
+male_number_model <- kbl(M5a_summary_tab [, 4:ncol(M5a_summary_tab)], digits = 3) %>%
+                          pack_rows("Count Process", 1, 2) %>%
+                          pack_rows("Binomial Process", 6, 6) %>%
+                          kable_styling() %>%
+                          add_header_above(header = c("Summary of mixed model for male number" = 5))
+
+save_kable(male_number_model, "output/male_number_model.pdf")
+```
+
+```{r}
+ED1 <- resid(M5a, type = "pearson")
+
+mu <- predict(M5a, type = "response")
+
+plot(x = mu, y = ED1, main = "Deviance residuals")
+
+boxplot(ED1 ~ treatment,
+        varwidth = TRUE, xlab = "Treatment",
+        main = "Residuals vs Treatment", 
+        ylab = "Residuals", data = males)
+
+boxplot(ED1 ~ batch,
+        varwidth = TRUE, xlab = "Batch",
+        main = "Residuals vs Batch", 
+        ylab = "Residuals", data = males)
+```
+
+Extract Predictions and SE for fixed effect component of model. 
+
+```{r}
+newdat <- expand.grid(treatment=levels(males$treatment), batch=levels(males$batch), colony="1")
+
+newdat$pred <- unlist(predict(M5a, newdata = newdat, type = "link", re.form = NA, se.fit = TRUE) [1])
+
+newdat$SE <- unlist(predict(M5a, newdata = newdat, type = "link", re.form = NA, se.fit = TRUE) [2])
+
+newdat$pred_resp <- exp(newdat$pred)
+
+newdat$ci_lower <- exp(newdat$pred - (1.96*newdat$SE))
+
+newdat$ci_upper <- exp(newdat$pred + (1.96*newdat$SE))
+```
+
+Treatment plot for block 1
+
+```{r}
+library(tidyverse)
+
+batch_one_only <- newdat [newdat$batch == "1", ]
+
+# ggplot
+p1_male_num_treat <- ggplot(data = batch_one_only, aes(x = treatment, y = pred_resp, colour = as.factor(treatment))) + 
+  
+  geom_point(position = position_dodge(width = 0.75), size = 3) +
+  
+  geom_errorbar(aes(x = treatment,
+                    ymin = ci_lower,
+                    ymax = ci_upper,
+                    colour = as.factor(treatment)),
+                position = position_dodge(width = 0.75),
+                width = 0.05, 
+                size = 0.8) +
+  
+  geom_point(data = males,
+             aes(x = treatment,
+                 y = number_of_males,
+                 colour = as.factor(treatment)),
+             alpha = 0.4,
+             position  = position_jitterdodge(),
+             show.legend = FALSE) +
+  
+  theme_bw() +
+
+  labs(y = "Number of males", colour = "Treatment", x = "Treatment") +
+    
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    
+  # ggtitle("Male Number") +
+    
+  scale_color_manual(values = c("#117733", "#332288")) +
+  
+  ggtitle("Male number by treatment") +
+  
+  theme(plot.title = element_text(size = 12),
+        legend.position = "none",
+        panel.grid = element_blank()) +
+  
+  # annotate(geom = "text", x = 2.4, y = 0, label = "bolditalic('p')~bold('= 0.65')", fontface = 2, size = 6, parse = TRUE) +
+  
+  scale_x_discrete(labels = c("Control", "Flupyradifurone"))
+
+p1_male_num_treat
+```
+
+Now for batch when treatment=control
+
+```{r}
+control_only <- newdat [newdat$treatment == "control", ]
+
+p_male_num_batch <- ggplot(data = control_only, aes(x = batch, y = pred_resp, colour = as.factor(batch))) + 
+  
+  geom_point(position = position_dodge(width = 0.75), size = 3) +
+  
+  geom_errorbar(aes(x = batch,
+                    ymin = ci_lower,
+                    ymax = ci_upper,
+                    colour = as.factor(batch)),
+                position = position_dodge(width = 0.75),
+                width = 0.05, 
+                size = 0.8) +
+  
+  geom_point(data = males,
+             aes(x = batch,
+                 y = number_of_males,
+                 colour = as.factor(batch)),
+             alpha = 0.4,
+             position  = position_jitterdodge(),
+             show.legend = FALSE) +
+  
+  theme_bw() +
+
+  labs(y = "Number of males", colour = "Batch", x = "Batch") +
+    
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    
+  ggtitle("Male number by batch") +
+    
+  theme(plot.title = element_text(size = 12),
+        legend.position = "none",
+        panel.grid = element_blank()) +
+  
+  scale_color_manual(values = c("#88CCEE", "#CC6677", "#DDCC77")) +
+
+  # annotate(geom = "text", x = 3.4, y = 0, label = "bolditalic('p')~bold('= 0.59')", fontface = 2, size = 6, parse = TRUE) +
+  
+  scale_x_discrete(expand = c(0, 0.7))
+  
+p_male_num_batch
+```
+
+```{r}
+pdf(file = "output/male_num_treatment_boxplot.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+p1_male_num_treat
+
+ dev.off()
+ 
+ pdf(file = "output/male_num_batch_boxplot.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+p_male_num_batch
+
+ dev.off()
+```
+
+Report the probability of false zeros is exp(-0.873) / 1 + exp(-0.873). This is 0.295. 
+
+Probabilities have to add to 1. The full range of outcomes is false zero, true zero and count. 
+
+The probability that (yi = 0) = P(false zero) + (1-P(false zero) x P(true zero))
+
+Let's unpack this. Probability of 0 is equal to the probability of a false zero plus the probability of an observation not being a false zero (everything else) multiplied by the probability of a true zero. 
+
+Probability that (yi > 0) = 1-P(false zero) x P(true count)
+
+so P(yi = 0) + P(yi > 0) = 1
+
+So for my data above where the mean for both groups is approximately 6. The probability of a 0 from a poisson with a mean of 6 is equal to e^-6, which is 0.25%. Therefore, the probability of a zero = 0.295 + (1-0.295)x0.0025 = 0.2966
+
+So if I calculate the probability of a false zero in terms of just the zeros  = 0.295/0.2966 = 0.995. 
+
+So basically all my zeros are false zeros. 
+
+The probability of false zeros therefore isn't showing the probability of a false zero in terms of just zeros, but in terms of of the whole data. 
+
+Therefore, if the mean of a poisson is 6 and my P(false zero) = 0.295, P(true zero) = (1-0.295)xe^-6) = 0.00175, P(yi > 0) = (1-0.295)xPr(Count Process)
+
+Pr(Count Process) = 1 - e^-6 = 0.9975 x (1-0.295) = 0.703
+
+Pr(total) = 0.295 + 0.00175 + 0.703 = 1
+
+^^^ do this properly below
+
+Take home is the probability of false zeros is in terms of total probability, not only conditional on zero.
+
+Fit a model that shows the probability of a false zero in comparison to a true model. Only way I could think of the total mean being shown for the count process was to shift the fixed effects across to the random effects component. May be incorrect but it shows that the majority of zeros were false zeros.
+
+```{r}
+false_zeros_description_model <- glmmTMB(number_of_males ~ 1 + (1 | colony) + (1 | treatment) + (1 | batch),
+                                          data = males,
+                                          ziformula=~1,
+                                          family = "nbinom2",
+                                          REML = TRUE)
+
+summary(false_zeros_description_model)
+
+# probability of false zero
+p_false_zero <- exp(-0.876)/ (1 + exp(-0.876))
+
+# probability of anything but a false zero
+p_not_false_zero <- 1 - (exp(-0.876)/ (1 + exp(-0.876)))
+
+# probability of true zero
+p_true_zero <- dnbinom(x = 0, size = 5.63, mu = exp(1.576))
+
+p_not_true_zero <- 1 - dnbinom(x = 0, size = 5.63, mu = exp(1.576))
+
+# should = 1
+p_false_zero + (p_not_false_zero*p_true_zero) + (p_not_false_zero*p_not_true_zero)
+```
+
+--------------------------------------------------------------------------------
+
+Male Mass
+
+Import data and give all the variables the suitable class
+
+```{r}
+library(tidyverse)
+
+male_mass_df <- read.csv("input/male_mass.csv")
+
+male_mass_df$male_number <- as.numeric(male_mass_df$male_number)
+
+male_mass_df$microcolony_number <- as.factor(male_mass_df$microcolony_number)
+
+male_mass_df$batch <- as.factor(male_mass_df$batch)
+
+male_mass_df$colony_number <- as.factor(male_mass_df$colony_number)
+
+male_mass_df$treatment <- as.factor(male_mass_df$treatment)
+
+male_mass_df$dry_mass_g <- as.numeric(male_mass_df$dry_mass_g)
+
+# number of males in control
+nrow(male_mass_df [male_mass_df$treatment == "control", ])
+# number of males in treatment
+nrow(male_mass_df [male_mass_df$treatment == "fpf-pure", ])
+```
+
+Express male mass in terms of mg not g and update column header
+
+```{r}
+male_mass_df$dry_mass_g <- male_mass_df$dry_mass_g * 1000
+
+colnames(male_mass_df) [6] <- "male_mass_mg"
+```
+
+Data Exploration
+
+```{r}
+# Cleveland Dot Plot. First make column with 1 and 2 that correspond to Treatment levels
+
+male_mass_df$clevelandcode <- factor(
+ifelse(male_mass_df$treatment == "control",
+1,
+2))
+
+male_mass_df$clevelandcode <- as.numeric(male_mass_df$clevelandcode)
+
+dotchart(male_mass_df$male_mass_mg,
+         groups = factor(male_mass_df$clevelandcode),
+         ylab = "Order of observations",
+         xlab = "male Mass (mg)", main = "Cleveland dotplot", pch = male_mass_df$clevelandcode)
+
+boxplot(male_mass_mg ~ treatment * batch,
+        varwidth = TRUE, xlab = "Treatment",
+        main = "Boxplot of male Mass Conditional on Treatment and Batch", 
+        ylab = "male Mass", data = male_mass_df)
+
+boxplot(male_mass_mg ~ batch,
+        varwidth = TRUE, xlab = "Treatment",
+        main = "Boxplot of male Mass Conditional on Batch", 
+        ylab = "male Mass", data = male_mass_df)
+
+boxplot(male_mass_mg ~ treatment,
+        varwidth = TRUE, xlab = "Treatment",
+        main = "Boxplot of male Mass Conditional on Treatment", 
+        ylab = "male Mass", data = male_mass_df)
+```
+
+Data Exploration wasn't difficult as I haven't got many explanatory variables to choose from. Starting model is
+
+male mass ~ treatment * batch + (1 | colony/microcolony) 
+
+Let's begin with a linear model
+
+```{r}
+M.lm <- lm(male_mass_mg ~ treatment * batch,
+           data = male_mass_df)
+
+drop1(M.lm, test = "F")
+
+# and the residuals vs fitted
+plot(M.lm, which = c (1))
+```
+
+Refit with gls and look at the residuals vs treatment, batch and treatment*batch. Also look at residuals vs microcolony. 
+
+```{r}
+library(nlme)
+
+M1.gls <- gls(male_mass_mg ~ treatment * batch,
+           data = male_mass_df)
+
+E <- resid(M1.gls)
+
+op <- par(mfrow = c(2, 2))
+
+boxplot(E ~ male_mass_df$treatment, main = "Treatment")
+abline(0, 0)
+
+boxplot(E ~ male_mass_df$batch, main = "Batch")
+abline(0, 0)
+
+boxplot(E ~ male_mass_df$treatment * male_mass_df$batch, main = "Treatment & Batch")
+abline(0, 0)
+
+boxplot(E ~ male_mass_df$microcolony_number, main = "Microcolony")
+abline(0, 0)
+```
+
+The variance looks slightly different for various treatment batch combinations. Also, for some microcolonies all the residuals are above or below 0, showing it should be included as an explanatory effect, in this case a random effect. 
+
+Fit varIdent variance structure and microcolony/colony as a random effect. 
+
+```{r}
+# start with random intercept
+M1.lme <- lme(male_mass_mg ~ treatment * batch,
+              data = male_mass_df,
+              random = ~ 1 | colony_number/microcolony_number, method = "REML")
+
+AIC(M1.lme, M1.gls)
+anova(M1.gls, M1.lme)
+
+# large improvement. Add varIdent
+M2.lme <- lme(male_mass_mg ~ treatment * batch,
+              data = male_mass_df,
+              weights = varIdent(form = ~ 1 | treatment * batch),
+              random = ~ 1 | colony_number/microcolony_number, method = "REML")
+
+anova(M1.lme, M2.lme)
+
+# small improvement
+
+# plot the standardised residuals versus fitted values
+plot(M1.lme, col = 1) 
+plot(M2.lme, col = 1) 
+
+E1 <- resid(M1.lme, type = "normalized")
+boxplot(E1 ~ male_mass_df$treatment * male_mass_df$batch, main = "Treatment & Batch")
+abline(0, 0)
+
+E2 <- resid(M2.lme, type = "normalized")
+boxplot(E2 ~ male_mass_df$treatment * male_mass_df$batch, main = "Treatment & Batch")
+abline(0, 0)
+```
+
+Looking at the residuals vs fitted for each model and residuals vs batchxtreatment and adding batchxtreatment variance structure does seem to improve it (look at control.3). Therefore I am going to keep it.
+
+Continue with M1.lme. Model selection of fixed terms.
+
+```{r}
+# redefine with ML
+# I realise there is a naming issue here. M2.lme has become M1.lme. It has no effect on the analysis though. 
+M1.lme <- lme(male_mass_mg ~ treatment * batch,
+              data = male_mass_df,
+              weights = varIdent(form = ~ 1 | treatment * batch),
+              random = ~ 1 | colony_number/microcolony_number, method = "ML")
+
+# drop interaction term
+M1.lmeA <- update(M1.lme, .~. -batch:treatment)
+
+anova(M1.lme, M1.lmeA)
+
+# dropped interaction term
+
+# drop batch
+M1.lmeB <- update(M1.lmeA, .~. -batch)
+
+anova(M1.lmeA, M1.lmeB)
+
+# drop treatment 
+M1.lmeC <- update(M1.lmeA, .~. -treatment)
+
+anova(M1.lmeA, M1.lmeC)
+
+# refit final model with REML
+M1.lmeA <- update(M1.lmeA, method = "REML")
+
+summary(M1.lmeA)
+```
+
+```{r}
+# gtsummary doesn't work for lme M1.lmeAs so create summary table manually
+M1.lmeA_summary_tab <- broom.mixed::tidy(x = M1.lmeA)
+
+# change multiplication factors to residual variance in each group
+M1.lmeA_summary_tab [5:10, 4] <- M1.lmeA_summary_tab [5:10, 4] * summary(M1.lmeA)$sigma
+
+colony_raneff_row <- data.frame(effect = "ran_pars", group = "colony", term = "sd_(Intercept)",
+                                estimate = 10.47065)
+
+microcolony_raneff_row <- data.frame(effect = "ran_pars", group = "microcolony", term = "sd_(Intercept)",
+                                estimate = 9.301985)
+
+M1.lmeA_summary_tab <- bind_rows(M1.lmeA_summary_tab, colony_raneff_row, microcolony_raneff_row)
+
+M1.lmeA_summary_tab [11, 3] <- paste(M1.lmeA_summary_tab [11, 2], ".", M1.lmeA_summary_tab [11, 3], sep = "")
+
+M1.lmeA_summary_tab [12, 3] <- paste(M1.lmeA_summary_tab [12, 2], ".", M1.lmeA_summary_tab [12, 3], sep = "")
+
+sequence <- 5:10
+
+for (i in 1:length(sequence)) {
+  
+  M1.lmeA_summary_tab [sequence [i], 3] <- paste("varIdent.", M1.lmeA_summary_tab [sequence [i], 3], sep = "")
+  
+}
+
+library(kableExtra)
+
+options(knitr.kable.NA = '_')
+
+male_mass_model <- kbl(M1.lmeA_summary_tab [, 3:ncol(M1.lmeA_summary_tab)], digits = 3) %>%
+                        kable_styling() %>%
+                        add_header_above(header = c("Summary of LMM for male mass" = 6))
+
+save_kable(male_mass_model, "output/male_mass_model.pdf")
+```
+
+```{r}
+# looks fine
+plot(M1.lmeA , which = c (1))
+```
+
+Extract Predictions and SE for fixed effect component of model. 
+
+```{r}
+M1.lmeA <- lme(male_mass_mg ~ treatment + batch,
+              data = male_mass_df,
+              weights = varIdent(form = ~ 1 | treatment * batch),
+              random = ~ 1 | colony_number/microcolony_number, method = "REML")
+
+summary(M1.lmeA)
+
+newdat <- expand.grid(treatment=levels(male_mass_df$treatment),
+                      batch=levels(male_mass_df$batch),
+                      colony_number = "1",
+                      microcolony_number = "1")
+
+newdat$pred <- predict(M1.lmeA, newdat, level = 0)
+
+Designmat <- model.matrix(eval(eval(M1.lmeA$call$fixed)[-2]), newdat[-3])
+
+predvar <- diag(Designmat %*% M1.lmeA$varFix %*% t(Designmat))
+
+newdat$SE <- sqrt(predvar)
+
+newdat$ci_lower <- newdat$pred - (1.96 * newdat$SE) # 1.96 or qt(1 - (0.05 / 2), n - 1)?
+
+newdat$ci_higher <- newdat$pred + (1.96 * newdat$SE) # 1.96 or qt(1 - (0.05 / 2), n - 1)?
+```
+
+```{r}
+batch_one_only <- newdat [newdat$batch == "1", ]
+
+# ggplot
+p1_male_mass_treat <- ggplot(data = batch_one_only, aes(x = treatment, y = pred, colour = as.factor(treatment))) + 
+  
+  geom_point(position = position_dodge(width = 0.75), size = 3) +
+  
+  geom_errorbar(aes(x = treatment,
+                    ymin = ci_lower,
+                    ymax = ci_higher,
+                    colour = as.factor(treatment)),
+                position = position_dodge(width = 0.75),
+                width = 0.05, 
+                size = 0.8) +
+  
+  geom_point(data = male_mass_df,
+             aes(x = treatment,
+                 y = male_mass_mg,
+                 colour = as.factor(treatment)),
+             alpha = 0.4,
+             position  = position_jitterdodge(),
+             show.legend = FALSE) +
+  
+  theme_bw() +
+
+  labs(y = "Male mass (mg)", colour = "Treatment", x = "Treatment") +
+    
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    
+  ggtitle("Male mass by treatment") +
+    
+  theme(plot.title = element_text(size = 12),
+        legend.position = "none",
+        panel.grid = element_blank()) +
+  
+  scale_color_manual(values = c("#117733", "#332288"), labels = c("Control", "Flupyradifurone")) +
+  
+  scale_x_discrete(labels=c("Control", "Flupyradifurone"))
+  
+  # annotate(geom = "text", x = 2.35, y = 47, label = "bolditalic('p')~bold('= 0.699')", fontface = 2, size = 6, parse = TRUE)
+
+
+p1_male_mass_treat
+```
+
+Now a batch plot for treatment=control
+
+```{r}
+control_only <- newdat [newdat$treatment == "control", ]
+
+p_male_mass_batch <- ggplot(data = control_only, aes(x = batch, y = pred, colour = as.factor(batch))) + 
+  
+  geom_point(position = position_dodge(width = 0.75), size = 3) +
+  
+  geom_errorbar(aes(x = batch,
+                    ymin = ci_lower,
+                    ymax = ci_higher,
+                    colour = as.factor(batch)),
+                position = position_dodge(width = 0.75),
+                width = 0.05, 
+                size = 0.8) +
+  
+  geom_point(data = male_mass_df,
+             aes(x = batch,
+                 y = male_mass_mg,
+                 colour = as.factor(batch)),
+             alpha = 0.4,
+             position  = position_jitterdodge(),
+             show.legend = FALSE) +
+  
+  theme_bw() +
+
+  labs(y = "Bee mass (mg)", colour = "Batch", x = "Treatment") +
+    
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    
+  ggtitle("Bee mass by batch") +
+    
+  theme(plot.title = element_text(size = 12),
+        legend.position = "none",
+        panel.grid = element_blank()) +
+  
+  scale_color_manual(values = c("#88CCEE", "#CC6677", "#DDCC77")) +
+
+  # annotate(geom = "text", x = 3.35, y = 47, label = "bolditalic('p')~bold('= 0.659')", fontface = 2, size = 6, parse = TRUE) +
+  
+  scale_x_discrete(expand = c(0,0.7))
+
+p_male_mass_batch
+```
+
+```{r}
+pdf(file = "output/male_mass_treatment_boxplot.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+p1_male_mass_treat
+
+ dev.off()
+
+pdf(file = "output/male_mass_batch_boxplot.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+p_male_mass_batch
+
+ dev.off()
+```
+
+--------------------------------------------------------------------------------
+
+Total Brood
+
+```{r}
+library(tidyverse)
+
+# load data
+brood <- read.csv("input/eggs_larvae_pupae.csv")
+
+# change class of variables and short variable names
+brood$batch <- as.factor(brood$batch)
+brood$colony <- as.factor(brood$colony)
+brood$treatment <- as.factor(brood$treatment)
+
+brood$eggs <- brood$number_of_eggs
+brood$larvae <- brood$number_of_larvae
+brood$pupae <- brood$number_of_pupae
+
+brood <- brood [, -c(5, 6, 7)]
+
+brood$eggs <- as.numeric(brood$eggs)
+brood$larvae <- as.numeric(brood$larvae)
+brood$pupae <- as.numeric(brood$pupae)
+brood$total_brood <- as.numeric((brood$total_brood))
+```
+
+Data Exploration
+
+```{r}
+# Cleveland Dot Plot. First make column with 1 and 2 that correspond to Treatment levels
+
+brood$clevelandcode <- factor(
+ifelse(brood$treatment == "control",
+1,
+2))
+
+brood$clevelandcode <- as.numeric(brood$clevelandcode)
+
+# first boxplots of individual stages 
+boxplot(eggs ~ treatment,
+        varwidth = TRUE, xlab = "Treatment",
+        main = "Boxplot of Egg Number Conditional on Treatment", 
+        ylab = "Number of Eggs", data = brood)
+
+boxplot(larvae ~ treatment,
+        varwidth = TRUE, xlab = "Treatment",
+        main = "Boxplot of Larvae Number Conditional on Treatment", 
+        ylab = "Number of Larvae", data = brood)
+
+boxplot(pupae ~ treatment,
+        varwidth = TRUE, xlab = "Treatment",
+        main = "Boxplot of Pupae Number Conditional on Treatment", 
+        ylab = "Number of Pupae", data = brood)
+
+# now bloxplot of total brood
+boxplot(total_brood ~ treatment,
+        varwidth = TRUE, xlab = "Treatment",
+        main = "Boxplot of Total Brood Conditional on Treatment", 
+        ylab = "Number of Total Brood", data = brood)
+
+boxplot(total_brood ~ batch,
+        varwidth = TRUE, xlab = "Batch",
+        main = "Boxplot of Total Brood Conditional on Batch", 
+        ylab = "Number of Total Brood", data = brood)
+
+boxplot(total_brood ~ treatment*batch,
+        varwidth = TRUE, xlab = "TreatmentxBatch",
+        main = "Boxplot of Total Brood Conditional on Treatment and Batch", 
+        ylab = "Number of Total Brood", data = brood)
+
+dotchart(brood$total_brood,
+         groups = factor(brood$clevelandcode),
+         ylab = "Order of observations",
+         xlab = "Brood Number", main = "Cleveland dotplot", pch = brood$clevelandcode)
+
+```
+
+No outliers. No treatment effect. Maybe a batch effect. Remember that batch 2 workers coincided with those that were in the larval stage during transportation.
+
+Start with beyond optimal Poisson GLM, extract residuals and plot against colony. Plot residual vs fitted values. Patterns in spread may indicate overdispersion or wrong choice of distribution. 
+
+```{r}
+M1 <- glm(total_brood ~ treatment*batch, family = poisson, data = brood)
+
+summary(M1)
+
+ED <- resid(M1, type = "deviance")
+
+mu <- predict(M1, type = "response")
+
+plot(x = mu, y = ED, main = "Deviance residuals")
+
+boxplot(ED ~ brood$colony, main = "Colony")
+abline(0, 0)
+```
+
+1182.9/54 = 21.9 so overdispersed. Use NB
+
+```{r}
+library(MASS)
+
+M2 <- glm.nb(total_brood ~ treatment*batch, 
+             link = "log", 
+             data = brood)
+
+summary(M2, cor = FALSE)
+
+ED1 <- resid(M2, type = "deviance")
+
+mu <- predict(M2, type = "response")
+
+plot(x = mu, y = ED1, main = "Deviance residuals")
+
+boxplot(ED1 ~ brood$colony, main = "Colony")
+abline(0, 0)
+```
+
+I can compare NB to Poisson as they are nested. 
+
+```{r}
+llhNB = logLik(M2)
+llhPoisson = logLik(M1)
+d <- 2 * (llhNB - llhPoisson)
+pval <- 0.5 * pchisq(as.numeric(d), df = 1,
+lower.tail = FALSE)
+
+d
+pval
+
+library(lmtest)
+lrtest(M2, M1)
+```
+
+Strong evidence for NB over P. 
+
+Include colony random effect as it is part of the experimental design.
+
+```{r}
+library(glmmTMB)
+
+# refit M2 with glmmTMB
+M2 <- glmmTMB(total_brood ~ treatment * batch,
+              data = brood,
+              family = "nbinom2", 
+              REML = TRUE)
+
+M3 <- glmmTMB(total_brood ~ treatment * batch + (1 | colony),
+              data = brood,
+              family = "nbinom2", 
+              REML = TRUE)
+
+anova(M2,M3)
+```
+
+As well as experimental design, plot justifies the inclusion of colony as a random effect. 
+
+```{r}
+M3 <- glmmTMB(total_brood ~ treatment * batch + (1 | colony),
+              data = brood,
+              family = "nbinom2", 
+              REML = FALSE)
+
+ED3 <- resid(M3, type = "pearson")
+
+boxplot(ED3 ~ brood$colony, main = "Colony")
+abline(0, 0)
+```
+
+Lets start with my beyond optimal model and perform model selection of the fixed effects.Set REML = FALSE  
+
+```{r}
+M3a <- glmmTMB(total_brood ~ treatment + batch + (1 | colony),
+              data = brood,
+              family = "nbinom2", 
+              REML = FALSE)
+
+anova(M3, M3a)
+
+# treatment:batch not significant. Dropped. M3a now reference
+M3b <- glmmTMB(total_brood ~ batch + (1 | colony),
+              data = brood,
+              family = "nbinom2", 
+              REML = FALSE)
+
+anova(M3a, M3b)
+
+M3c <- glmmTMB(total_brood ~ treatment + (1 | colony),
+              data = brood,
+              family = "nbinom2", 
+              REML = FALSE)
+
+anova(M3a, M3c)
+
+# batch and treatment can't be dropped as they are part of the experimental design
+# M3a final model
+# M3b and M3c test the overall significance of the variable.
+```
+
+So batch is significant. A likelihood ratio test between a model including batch, treatment and the intercept and one containing only treatment and the intercept yielded a deviance of 12.202 and approximately follows a Chi-square distribution with 2 degree of freedom. Pr(>Chisq) = 0.00224.
+
+Treatment was not significant.Pr(>Chisq) = 0.4407, deviance = 0.5945, approximately Chi-square distributed with 1 degree of freedom.
+
+```{r}
+# refit with REML = TRUE
+M3a <- glmmTMB(total_brood ~ batch + treatment + (1 | colony),
+              data = brood,
+              family = "nbinom2", 
+              REML = TRUE)
+
+summary(M3a)
+```
+
+``` {r}
+# gtsummary doesn't work for lme M1.lmeAs so create summary table manually
+M3a_summary_tab <- broom.mixed::tidy(x = M3a)
+
+M3a_summary_tab [5, 4] <- paste(M3a_summary_tab [5, 3], ".", M3a_summary_tab [5, 4], sep = "")
+
+library(kableExtra)
+
+options(knitr.kable.NA = '_')
+
+brood_number_model <- kbl(M3a_summary_tab [, 4:ncol(M3a_summary_tab)], digits = 3) %>%
+                          kable_styling() %>%
+                          add_header_above(header = c("Summary of NB GLMM for total brood number" = 5))
+
+save_kable(brood_number_model, "output/brood_number_model.pdf")
+```
+
+Variance and standard deviation of colony random effect both apply to it. Std.Dev^2 = Variance
+
+```{r}
+ED4 <- resid(M3a, type = "pearson")
+
+mu <- predict(M3a, type = "response")
+
+plot(x = mu, y = ED4, main = "Pearson Residuals vs Fitted")
+
+boxplot(ED4 ~ brood$batch, main = "Batch vs Residuals")
+```
+
+So Batch 2 had significantly smaller total brood sizes than the other two batches. Biological meaning is if workers have disrupted development (transportation) during their larval stage, they have lower fitness in comparison to those whose development is disrupted during the late pupal stage, and those whose development is not disrupted at all. 
+
+FPF pure had no effect on total brood size. 
+
+For batch
+
+```{r}
+brood$batch <- factor(brood$batch, levels = c("1", "2", "3"))
+
+M3a <- glmmTMB(total_brood ~ batch + treatment + (1 | colony),
+              data = brood,
+              family = "nbinom2", 
+              REML = TRUE)
+
+
+summary(M3a)
+
+newdata <- data_frame(treatment = "control",
+                      batch = c("1", "2", "3"),
+                      colony = "1")
+
+batch_predictions <- predict(M3a, newdata = newdata, type = "link", re.form = NA, se.fit = TRUE)
+
+batch_predictions_df <- cbind(newdata, batch_predictions [1], batch_predictions [2])
+
+response_prediction <- exp(batch_predictions_df [4])
+
+ci_upper <- exp(batch_predictions_df [4] + (1.96 * batch_predictions_df [5])) # is 1.96 appropriate or qt(1 - (0.05 / 2), n - 1)?
+
+ci_lower <- exp(batch_predictions_df [4] - (1.96 * batch_predictions_df [5])) # is 1.96 appropriate or qt(1 - (0.05 / 2), n - 1)?
+
+batch_predictions_df <- cbind(batch_predictions_df, response_prediction, ci_upper, ci_lower)
+
+colnames(batch_predictions_df) <- c("treatment", "batch", "colony", "link_fit", "link_se",
+                                    "response_fit", "ci_upper", "ci_lower")
+```
+
+```{r}
+# ggplot
+p1_total_brood_batch <- ggplot(data = batch_predictions_df, aes(x = batch, y = response_fit, colour = as.factor(batch))) + 
+  
+  geom_point(position = position_dodge(width = 0.75), size = 3) +
+  
+  geom_errorbar(aes(x = batch,
+                    ymin = ci_lower,
+                    ymax = ci_upper,
+                    colour = as.factor(batch)),
+                position = position_dodge(width = 0.75),
+                width = 0.05, 
+                size = 0.8) +
+  
+  geom_point(data = brood,
+             aes(x = batch,
+                 y = total_brood,
+                 colour = as.factor(batch)),
+             alpha = 0.4,
+             position  = position_jitterdodge(),
+             show.legend = FALSE) +
+  
+  theme_bw() +
+
+  labs(y = "Total brood", colour = "Batch", x = "Batch") +
+    
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    
+  ggtitle("Total brood by batch") +
+    
+  theme(plot.title = element_text(size = 12),
+        legend.position = "none",
+        panel.grid = element_blank()) +
+  
+  scale_color_manual(values = c("#88CCEE", "#CC6677", "#DDCC77")) 
+
+p1_total_brood_batch
+
+```
+
+For Treatment
+
+```{r}
+M3a <- glmmTMB(total_brood ~ batch + treatment + (1 | colony),
+              data = brood,
+              family = "nbinom2", 
+              REML = TRUE)
+
+
+summary(M3a)
+
+newdata <- data_frame(treatment = c("control", "fpf-pure"),
+                      batch = "1",
+                      colony = "1")
+
+treatment_predictions <- predict(M3a, newdata = newdata, type = "link", re.form = NA, se.fit = TRUE)
+
+treatment_predictions_df <- cbind(newdata, treatment_predictions [1], treatment_predictions [2])
+
+response_prediction <- exp(treatment_predictions_df [4])
+
+ci_upper <- exp(treatment_predictions_df [4] + (1.96 * treatment_predictions_df [5])) # 1.96 or qt(1 - (0.05 / 2), n - 1)?
+
+ci_lower <- exp(treatment_predictions_df [4] - (1.96 * treatment_predictions_df [5])) # 1.96 or qt(1 - (0.05 / 2), n - 1)?
+
+treatment_predictions_df <- cbind(treatment_predictions_df, response_prediction, ci_upper, ci_lower)
+
+colnames(treatment_predictions_df) <- c("treatment", "batch", "colony", "link_fit", "link_se",
+                                    "response_fit", "ci_upper", "ci_lower")
+```
+
+```{r}
+# ggplot
+p_total_brood_treat <- ggplot(data = treatment_predictions_df, aes(x = treatment, y = response_fit, colour = as.factor(treatment))) + 
+  
+  geom_point(position = position_dodge(width = 0.75), size = 3) +
+  
+  geom_errorbar(aes(x = treatment,
+                    ymin = ci_lower,
+                    ymax = ci_upper,
+                    colour = as.factor(treatment)),
+                position = position_dodge(width = 0.75),
+                width = 0.05, 
+                size = 0.8) +
+  
+  geom_point(data = brood,
+             aes(x = treatment,
+                 y = total_brood,
+                 colour = as.factor(treatment)),
+             alpha = 0.4,
+             position  = position_jitterdodge(),
+             show.legend = FALSE) +
+  
+  theme_bw() +
+
+  labs(y = "Total brood", colour = "Treatment", x = "Treatment") +
+    
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    
+  ggtitle("Total brood by treatment") +
+    
+  theme(plot.title = element_text(size = 12),
+        legend.position = "none",
+        panel.grid = element_blank()) +
+  
+  scale_color_manual(values = c("#117733", "#332288")) +
+  
+  scale_x_discrete(labels=c("Control", "Flupyradifurone"))
+
+p_total_brood_treat
+
+```
+
+```{r}
+pdf(file = "output/treatment_brood.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+p_total_brood_treat
+
+ dev.off()
+
+pdf(file = "output/batch_brood.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+p1_total_brood_batch
+
+ dev.off()
+```
+
+--------------------------------------------------------------------------------
+
+Time to egg laying
+
+```{r}
+# import csv
+egg_laying_df <- read.csv("input/egg-laying-data.csv")
+
+colnames(egg_laying_df) <- c("microcolony", "batch","colony", "treatment", "egg_laying_day", 
+                             "day")
+
+# set variables as factors with appropriate reference levels
+egg_laying_df$treatment <- as.factor(egg_laying_df$treatment)
+egg_laying_df$treatment <- relevel(egg_laying_df$treatment, "control")
+
+egg_laying_df$batch <- as.factor(egg_laying_df$batch)
+egg_laying_df$batch <- relevel(egg_laying_df$batch, "1")
+
+egg_laying_df$colony <- as.factor(egg_laying_df$colony)
+egg_laying_df$colony <- relevel(egg_laying_df$colony, "1")
+
+egg_laying_df$day <- as.numeric(egg_laying_df$day)
+
+# remove column
+egg_laying_df <- egg_laying_df [, -5]
+
+# remove microcolonies that had already laid eggs before exposure began
+egg_laying_df <- egg_laying_df [egg_laying_df$day != 0,]
+
+# remove sivanto rows
+egg_laying_df <- egg_laying_df [egg_laying_df$treatment != "sivanto",]
+
+egg_laying_df$treatment <- factor(egg_laying_df$treatment)
+
+# add event Y/N column
+egg_laying_df$laying_event <- 1
+```
+
+```{r}
+library(survival)
+library(coxme)
+
+cfit1 <- coxme(Surv(day, laying_event) ~ batch * treatment + (1 | colony), data=egg_laying_df)
+
+# drop
+cfit2 <- coxme(Surv(day, laying_event) ~ batch + treatment + (1 | colony), data=egg_laying_df)
+anova(cfit1, cfit2)
+
+# test significance of batch
+cfit3 <- coxme(Surv(day, laying_event) ~ treatment + (1 | colony), data=egg_laying_df)
+anova(cfit2, cfit3)
+
+# test significance of treatment
+cfit4 <- coxme(Surv(day, laying_event) ~ batch + (1 | colony), data=egg_laying_df)
+anova(cfit2, cfit4)
+
+# treatment + batch
+summary(cfit2)
+```
+
+``` {r}
+summary(cfit2)
+
+# parameter estimate
+as.data.frame(fixef(cfit2))
+
+# parameter estimate SE
+as.data.frame(sqrt(diag(vcov(cfit2))))
+
+# z score
+as.data.frame(fixef(cfit2)/sqrt(diag(vcov(cfit2))))
+
+# p values
+as.data.frame(2 * pnorm(-abs(fixef(cfit2)/sqrt(diag(vcov(cfit2))))))
+
+cfit2_summary_table <- cbind(as.data.frame(fixef(cfit2)),
+                             as.data.frame(sqrt(diag(vcov(cfit2)))),
+                             as.data.frame(fixef(cfit2)/sqrt(diag(vcov(cfit2)))),
+                             as.data.frame(2 * pnorm(-abs(fixef(cfit2)/sqrt(diag(vcov(cfit2)))))))
+
+cfit2_summary_table <- cbind(rownames(cfit2_summary_table), cfit2_summary_table)
+
+rownames(cfit2_summary_table) <- 1:3
+
+colnames(cfit2_summary_table) <- c("term", "estimate", "SE", "z-score", "p-value")
+
+# random effect st.dev
+coxme_re <- as.data.frame(sqrt(cfit2$vcoef [[1]]))
+
+coxme_re <- cbind("colony.sd_(Intercept)", coxme_re)
+
+rownames(coxme_re) <- 1
+
+colnames(coxme_re) <- c("term", "estimate")
+
+cfit2_summary_table <- bind_rows(cfit2_summary_table, coxme_re)
+
+rownames(cfit2_summary_table) <- 1:4
+
+library(kableExtra)
+
+options(knitr.kable.NA = '_')
+
+egg_laying_model <- kbl(cfit2_summary_table, digits = 3) %>%
+                                  kable_styling() %>%
+                                  add_header_above(header = c("Summary of Cox proportional hazards model for time to egg-laying" = 5))
+
+save_kable(egg_laying_model, "output/egg_laying_model.pdf")
+
+```
+
+```{r}
+# proportional hazards
+zp1 <- cox.zph(cfit2)
+zp1
+
+# plot(zp1[2])
+plot(zp1[1])
+```
+
+Passes proportionality test. 
+
+Neither batch or treatment had an effect on the hazards ratio for egg laying.  
+
+```{r}
+# random effect term not significant. Justifies use of coxph, dropping of random effect.
+cfit1 <- coxme(Surv(day, laying_event) ~ batch * treatment + (1 | colony), data=egg_laying_df)
+
+cphfit1 <- coxph(Surv(day, laying_event) ~ batch * treatment, data=egg_laying_df)
+
+anova(cfit1, cphfit1)
+```
+
+```{r}
+# refit final model with coxph
+cphfit2 <- coxph(Surv(day, laying_event) ~ treatment + batch, data=egg_laying_df)
+
+summary(cphfit2)
+
+# make predictions for coxph model batch 1 MCs
+fit2 <- survfit(cphfit2, newdata=data.frame(treatment=c("control", "fpf-pure"),
+                                         batch=c("1", "1")))
+```
+
+Plots for treatment
+
+```{r}
+# if survminer installation doesn't work edit ~/.R/Makevars
+# according to this https://stackoverflow.com/questions/35999874/mac-os-x-r-error-ld-warning-directory-not-found-for-option
+
+library(survminer)
+
+# for prettier graphs
+p_ttel_treat <- ggsurvplot(fit2,
+                data = egg_laying_df,
+                fun='event',
+                conf.int = TRUE,
+                palette = c("#117733", "#332288"),
+                legend.labs = c("Control", "Flupyradifurone"),
+                xlab = "Time (days)",
+                ylab = "Probability of egg laying",
+                legend.title = "",
+                title = "Time to egg laying by treatment")
+
+
+p_ttel_treat <- p_ttel_treat + theme_survminer(font.main = c(12),
+                                               font.x = c(11, "black"),
+                                               font.y = c(11, "black"),
+                                               font.tickslab = c(9, "plain", "black"),
+                                               font.legend = c(9, "plain", "black"))
+
+# p <- p$plot + theme(plot.title = element_text(hjust = 0.5, face = "bold")) + annotate(geom = "text", x = 14, y = 0.02, label = "bolditalic('p')~bold('= 0.829')", # fontface = 2, size = 6, parse = TRUE)
+
+p_ttel_treat <- p_ttel_treat$plot +
+  theme_bw() +
+  theme(plot.title = element_text(size = 12),
+        legend.position = "none",
+        panel.grid = element_blank())
+
+p_ttel_treat
+```
+
+Plots for batch
+
+```{r}
+# make predictions for coxph model batch 1 MCs
+fit_batch <- survfit(cphfit2, newdata=data.frame(treatment=c("control", "control", "control"),
+                                         batch=c("1", "2", "3")))
+
+# for prettier graphs
+p_ttel_batch <- ggsurvplot(fit_batch,
+                data = egg_laying_df,
+                fun='event',
+                conf.int = TRUE,
+                palette = c("#88CCEE", "#CC6677", "#DDCC77"),
+                legend.labs = c("1", "2", "3"),
+                xlab = "Time (days)",
+                ylab = "Probability of egg laying",
+                legend.title = "",
+                title = "Time to egg laying by batch")
+
+
+p_ttel_batch <- p_ttel_batch$plot +
+  theme_bw() +
+  theme(plot.title = element_text(size = 12),
+        legend.position = "none",
+        panel.grid = element_blank())
+
+# p <- p$plot + theme(plot.title = element_text(hjust = 0.5, face = "bold")) + annotate(geom = "text", x = 14, y = 0.02, label = "bolditalic('p')~bold('= 0.829')", # fontface = 2, size = 6, parse = TRUE)
+
+p_ttel_batch$plot
+```
+
+
+```{r}
+pdf(file = "output/egg_laying_plot_treat.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+p_ttel_treat
+
+dev.off()
+
+pdf(file = "output/egg_laying_plot_batch.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+p_ttel_batch
+
+dev.off()
+```
+
+Two sources I used for below info 
+
+[link 1](https://rpubs.com/daspringate/survival)
+[link 2](https://thomaselove.github.io/432-notes/cox-regression-models-for-survival-data-example-1.html)
+
+Hazard Function
+Survival models can be viewed as consisting of two parts: the underlying hazard function, describing how the risk of event per time unit changes over time at baseline levels of covariates; and the effect parameters, describing how the hazard varies in response to explanatory covariates.
+
+h(t|x) = h0(t) exp[B1.x]
+
+h0(t) = is the baseline hazard, which is a non-parametric and unspecified value which depends on t but not on x.
+
+exp[B1.x] = how the baseline hazard is modified as x changes. 
+
+It is a semi-parametric model:
+
+The baseline hazard function is unspecified
+The effects of the covariates are multiplicative (proportional assumption)
+Doesn't make arbitrary assumptions about the shape/form of the baseline hazard function
+
+Proportionality Assumption
+In a proportional hazards model, the unique effect of a unit increase in a covariate is multiplicative with respect to the hazard rate. For example, taking a drug may halve one’s hazard rate for a stroke occurring, or, changing the material from which a manufactured component is constructed may double its hazard rate for failure.
+
+Covariates multiply the hazard by some constant
+e.g. a drug may halve a subjects risk of death at any time
+*The effect is the same at any time point*
+
+Accounting for non-proportional hazards
+Include an interaction with time for the variables:
+This factors time out of the main effect
+Only use if it makes sense to have a linear interaction between the covariate and time (look at the graphs!)
+
+Another way of showing the results
+
+```{r}
+# ggcoxadjustedcurves(coxph1)
+egg_laying_forest_plot <- ggforest(cphfit2)
+
+pdf(file = "output/egg_laying_forest_plot.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+egg_laying_forest_plot
+
+dev.off()
+```
+
+--------------------------------------------------------------------------------
+
+Combo plots
+
+Cowplot panel layouts for the graphs by treatment and then batch
+
+```{r}
+library(cowplot)
+
+plot_grid(p1_male_num_treat, p1_male_mass_treat, p_total_brood_treat, p_ttel_treat, labels = c('A', 'B', 'C', 'D'))
+
+pdf(file = "output/fitness_treat_plots.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+plot_grid(p1_male_num_treat, p1_male_mass_treat, p_total_brood_treat, p_ttel_treat, labels = c('A', 'B', 'C', 'D'))
+
+ dev.off()
+```
+
+Cowplot for batch
+
+```{r}
+plot_grid(p_male_num_batch, p_male_mass_batch, p1_total_brood_batch, p_ttel_batch, labels = c('A', 'B', 'C', 'D'))
+
+pdf(file = "output/fitness_batch_plots.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+plot_grid(p_male_num_batch, p_male_mass_batch, p1_total_brood_batch, p_ttel_batch, labels = c('A', 'B', 'C', 'D'))
+
+ dev.off()
+```
+
+--------------------------------------------------------------------------------
+
+Survival
+
+I used the example dataset "ovarian" in the survival package to set up my data. In a really old (1999) version of the survival package vignette I found the definition of fustat and futime. 
+
+futime: The number of days from enrollment until death or censoring, whichever
+came first.
+
+fustat: An indicator of death (1) or censoring (0).
+
+Therefore my data should have these columns
+
+worker number | microcolony | colony | batch | treatment | survivalday | death
+
+In death column death = 1, censoring = 0
+
+```{r}
+library(survival)
+library(coxme)
+
+# import
+workers <- read.csv("input/worker_survival.csv")
+
+# sort out variable classes
+workers$microcolony <- as.factor(workers$microcolony)
+workers$colony <- as.factor(workers$colony)
+workers$batch <- as.factor(workers$batch)
+workers$treatment <- as.factor(workers$treatment)
+workers$days <- as.numeric(workers$days_survival_post_treatment)
+
+workers <- workers [, -6]
+
+# add censoring column 
+workers$death <- 0
+
+for (i in 1:nrow(workers)) {
+  
+  if (workers$days [i] != 30) {workers$death [i] <- 1}
+  
+}
+```
+
+Begin the analysis
+
+```{r}
+cfit1 <- coxph(Surv(days, death) ~ batch * treatment, data=workers)
+
+cfit2 <- coxme(Surv(days, death) ~ batch * treatment + (1 | colony/microcolony), data=workers)
+
+AIC(cfit1, cfit2)
+
+# slight improvement
+anova(cfit1, cfit2)
+
+cfit3 <- coxme(Surv(days, death) ~ batch + treatment + (1 | colony/microcolony), data=workers)
+
+anova(cfit2, cfit3)
+
+# interaction term is significant
+# issue is the interaction term is significant due to the differing effects of treatment in batch 2, but not for 
+# other batches. For batch 2 control survival is lower than fpf-pure survival. Also when an interaction term is
+# included the parameter estimates start behaving weirdly. 
+
+summary(cfit2)
+```
+
+```{r}
+summary(cfit3)
+
+# parameter estimate
+as.data.frame(fixef(cfit3))
+
+# parameter estimate SE
+as.data.frame(sqrt(diag(vcov(cfit3))))
+
+# z score
+as.data.frame(fixef(cfit3)/sqrt(diag(vcov(cfit3))))
+
+# p values
+as.data.frame(2 * pnorm(-abs(fixef(cfit3)/sqrt(diag(vcov(cfit3))))))
+
+cfit3_summary_table <- cbind(as.data.frame(fixef(cfit3)),
+                             as.data.frame(sqrt(diag(vcov(cfit3)))),
+                             as.data.frame(fixef(cfit3)/sqrt(diag(vcov(cfit3)))),
+                             as.data.frame(2 * pnorm(-abs(fixef(cfit3)/sqrt(diag(vcov(cfit3)))))))
+
+cfit3_summary_table <- cbind(rownames(cfit3_summary_table), cfit3_summary_table)
+
+rownames(cfit3_summary_table) <- 1:3
+
+colnames(cfit3_summary_table) <- c("term", "estimate", "SE", "z-score", "p-value")
+
+# random effect st.dev
+coxme_re <- as.data.frame(sqrt(cfit3$vcoef [[1]]))
+
+coxme_re <- cbind("colony.sd_(Intercept)", coxme_re)
+
+rownames(coxme_re) <- 1
+
+colnames(coxme_re) <- c("term", "estimate")
+
+cfit3_summary_table <- bind_rows(cfit3_summary_table, coxme_re)
+
+rownames(cfit3_summary_table) <- 1:4
+
+library(kableExtra)
+
+options(knitr.kable.NA = '_')
+
+worker_survival_model <- kbl(cfit3_summary_table, digits = 3) %>%
+                            kable_styling() %>%
+                            add_header_above(header = c("Summary of Cox proportional hazards model for worker survival" = 5))
+
+save_kable(worker_survival_model, "output/worker_survival_model.pdf")
+```
+
+```{r}
+# continue with batch+treatment as this has more biological/experimental interpretation and the estimates don't bug out. 
+summary(cfit3)
+
+# significance of batch and treatment if interaction term is omitted
+cfit4 <- coxme(Surv(days, death) ~ treatment + (1 | colony/microcolony), data=workers)
+anova(cfit3, cfit4)
+
+cfit5 <- coxme(Surv(days, death) ~ batch + (1 | colony/microcolony), data=workers)
+anova(cfit3, cfit5)
+```
+
+Batch has an effect. Treatment does not. Leave both in model as part of experimental design.
+
+The coefficients in a Cox regression relate to hazard; a positive coefficient indicates a worse prognosis and a negative coefficient indicates a protective effect of the variable with which it is associated.
+
+Model Validation: 
+
+zph() checks for proportionality assumption, by using the Schoenfeld residuals against the transformed time. Having very small p values indicates that there are time dependent coefficients which you need to take care of. That is to say, the proportionality assumption does not check linearity - the Cox PH model is semi parametric and thus makes no assumption as to the form of the hazard. The proportionality assumption is that the hazard rate of an individual is relatively constant in time, and this is what cox.zph() tests.
+
+```{r}
+# proportional hazards
+zp1 <- cox.zph(cfit3)
+zp1
+
+plot(zp1[1], resid=FALSE)
+```
+
+Proportionality assumption ok. 
+
+```{r}
+library(survminer)
+
+# Instead of plotting Kaplan-Meier graphs plot the output of the Cox Proportional Hazards Model.
+
+# refit final model with coxph
+cphfit2 <- coxph(Surv(days, death) ~ treatment + batch, data=workers)
+
+fit2 <- survfit(cphfit2, newdata=data.frame(treatment=c("control", "fpf-pure"),
+                                         batch=c("1", "1")))
+
+fit3 <- survfit(cphfit2, newdata=data.frame(treatment=c("control"),
+                                         batch=c("1", "2", "3")))
+
+summary(cphfit2)
+```
+
+Coxph plot
+
+```{r}
+p1_surv_treat <- ggsurvplot(fit2,
+                data = workers,
+                conf.int = TRUE,
+                palette = c("#117733", "#332288"),
+                legend.labs = c("Control", "Flupyradifurone"),
+                xlab = "Time (days)",
+                ylab = "Probability of survival",
+                legend = c(0.8, 0.3),
+                legend.title = "",
+                title = "Survival by treatment",
+                ylim = c(0.8,1))
+
+
+
+p1_surv_treat <- p1_surv_treat$plot +
+  theme_bw() +
+  theme(plot.title = element_text(size = 12),
+        panel.grid = element_blank(),
+        legend.position= "top")
+
+p1_surv_treat
+```
+
+Now for Batch
+
+```{r}
+p2_surv_batch <- ggsurvplot(fit3,
+                data = workers,
+                conf.int = TRUE,
+                palette = c("#88CCEE", "#CC6677", "#DDCC77"),
+                legend.labs = c("1", "2", "3"),
+                xlab = "Time (days)",
+                ylab = "",
+                legend.title = "",
+                title = "Survival by batch",
+                ylim = c(0.5,1))
+
+# p2_surv_batch <- p2_surv_batch$plot + theme(plot.title = element_text(hjust = 0.5, face = "bold")) + annotate(geom = "text", x = 28, y = 0.505, label = "bolditalic('p')~bold('= 0.002')", fontface = 2, size = 6, parse = TRUE)
+
+p2_surv_batch <- p2_surv_batch$plot +
+  theme_bw() +
+  theme(plot.title = element_text(size = 12),
+        panel.grid = element_blank(),
+        legend.position= "top")
+
+p2_surv_batch
+```
+
+```{r}
+pdf(file = "output/survival_batch_plot.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+p1_surv_treat
+
+ dev.off()
+ 
+pdf(file = "output/survival_treatment_plot.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+p2_surv_batch
+
+ dev.off()
+```
+
+Survival combo plot
+
+```{r}
+plot_grid(p1_surv_treat, p2_surv_batch, labels = c('A', 'B'))
+
+pdf(file = "output/survival_treatment_batch.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+plot_grid(p1_surv_treat, p2_surv_batch, labels = c('A', 'B'))
+
+ dev.off()
+```
+
+--------------------------------------------------------------------------------
+
+Sucrose consumption
+
+```{r}
+sucrose <- read.csv("input/sucrose_consumption_corrected_long.csv")
+```
+
+```{r}
+# x1000 for mg
+sucrose$corrected_consumption <- sucrose$corrected_consumption * 1000
+```
+
+First correct day consumption values for worker number. 
+
+```{r}
+worker_number <- read.csv("input/number_of_workers_each_day.csv")
+
+# convert into long format
+day <- c("1", "2", "4", "6", "8", "10")
+
+worker_long <- tibble()
+
+for (i in 1:length(day)) {
+  
+  worker_temp <- worker_number [, c(1:5, 5+i)]
+  
+  worker_temp$day <- day [i]
+  
+  colnames(worker_temp) [6] <- "worker_number"
+  
+  worker_long <- rbind(worker_long, worker_temp)
+  
+}
+
+# create microcolony_day variable for worker_long and sucrose
+worker_long$mc_day <- paste0(worker_long$microcolony.number, "_", worker_long$day)
+
+sucrose$mc_day <- paste0(sucrose$microcolony_number, "_", sucrose$day)
+
+# associate the worker number with the sucrose dataframe. below says for each row of sucrose df
+# scan each row of the worker_long df. if there is a match between the mc_day unique identifier
+# then put the worker number value for that row of worker_long into the matched row of sucrose df
+sucrose$worker_number <- 0
+
+for (i in 1:nrow(sucrose)) {
+  
+  for (k in 1:nrow(worker_long)) {
+    
+      if (sucrose$mc_day [i] == worker_long$mc_day [k]) {sucrose$worker_number [i] <- worker_long$worker_number [k]}
+    
+  }
+}
+
+# remove mc_day from sucrose
+sucrose <- sucrose [,-7]
+
+# divide corrected consumption values by number of bees present
+sucrose$corrected_consumption <- sucrose$corrected_consumption / sucrose$worker_number
+```
+
+Calculate average total consumption per bee per microcolony. May be more accurate to describe this as total sucrose processed per bee per microcolony.
+
+```{r}
+# sum consumption by MC
+tot_con <- tibble()
+
+microcolony_numbers <- unique(sucrose$microcolony_number)
+
+for (i in 1:length(microcolony_numbers)) {
+  
+  if (length(sucrose$corrected_consumption [sucrose$microcolony_number == microcolony_numbers [i]]) == 6) {
+
+  filtered_con <- cbind(sum(sucrose$corrected_consumption [sucrose$microcolony_number == microcolony_numbers [i]]), microcolony_numbers [i])
+  
+  tot_con <- rbind(tot_con, filtered_con)
+  
+  }
+
+}
+
+# re-associate these MC values with colony, batch etc information
+batch_col_info <- unique(sucrose [, c(1,2,3,4)])
+
+batch_col_info$corrected_consumption <- 0 
+
+for (i in 1:nrow(tot_con)) {
+  
+  for (k in 1:nrow(batch_col_info)) {
+    
+    if (tot_con [i, 2] == batch_col_info [k, 1]) {
+      
+      batch_col_info$corrected_consumption [k] <- tot_con [i, 1] 
+      
+    }
+    
+  }
+  
+}
+
+# remove 0s (these had spills) and rename data
+sucrose <- batch_col_info
+
+sucrose <- sucrose [sucrose$corrected_consumption > 0, ]
+
+```
+
+```{r}
+# sort out the variable classes
+sucrose$microcolony_number <- as.factor(sucrose$microcolony_number)
+sucrose$batch <- as.factor(sucrose$batch)
+sucrose$colony_derived_from <- as.factor(sucrose$colony_derived_from)
+sucrose$treatment <- as.factor(sucrose$treatment)
+```
+
+Now begin analysis. At this point I have corrected the consumption values to account for number of bees present on particular day, summed those values and removed any MCs that didn't have full consumption dataset. 
+
+Bit of exploratory analysis first
+
+```{r}
+# Cleveland Dot Plot. First make column with 1 and 2 that correspond to Treatment levels
+
+sucrose$clevelandcode <- factor(
+ifelse(sucrose$treatment == "control",
+1,
+2))
+
+sucrose$clevelandcode <- as.numeric(sucrose$clevelandcode)
+
+dotchart(sucrose$corrected_consumption,
+         groups = factor(sucrose$clevelandcode),
+         ylab = "Order of observations",
+         xlab = "Consumption (mg)", main = "Cleveland dotplot", pch = sucrose$clevelandcode)
+
+boxplot(corrected_consumption ~ treatment * batch,
+        varwidth = TRUE, xlab = "TreatmentxBatch",
+        main = "Boxplot of Consumption Conditional on Treatment and Batch", 
+        ylab = "Consumption", data = sucrose)
+
+boxplot(corrected_consumption ~ batch,
+        varwidth = TRUE, xlab = "Batch",
+        main = "Boxplot of Consumption Conditional on Batch", 
+        ylab = "Consumption", data = sucrose)
+
+boxplot(corrected_consumption ~ treatment,
+        varwidth = TRUE, xlab = "Treatment",
+        main = "Boxplot of Consumption Conditional on Treatment", 
+        ylab = "Consumption", data = sucrose)
+```
+
+Looks like variance varies by treatment and colony combination. So include this as varIdent term in random structure. Colony is a potential random effect. Let's fit beyond optimal model. 
+
+```{r}
+library(nlme)
+
+M1.gls <- gls(corrected_consumption ~ treatment + batch + treatment:batch, data = sucrose, method = "REML")
+
+E <- resid(M1.gls)
+
+op <- par(mfrow = c(2, 2))
+
+boxplot(E ~ sucrose$treatment, main = "Treatment")
+abline(0, 0)
+
+boxplot(E ~ sucrose$batch, main = "Batch")
+abline(0, 0)
+
+boxplot(E ~ sucrose$treatment * sucrose$batch, main = "Treatment & Batch")
+abline(0, 0)
+
+boxplot(E ~ sucrose$colony_derived_from, main = "Colony")
+abline(0, 0)
+
+par(op)
+
+plot(M1.gls, which = c (1))
+```
+
+Indicates colony should be included as a random effect. Batch*treatment seems to be driver of heterogeneity.
+
+```{r}
+# What about the variance structure?
+M1a.gls <- gls(corrected_consumption ~ treatment + batch + treatment:batch,
+               data = sucrose,
+               method = "REML",
+               weights = varIdent(form =~ 1 | treatment*batch))
+
+M1b.gls <- gls(corrected_consumption ~ treatment + batch + treatment:batch,
+               data = sucrose,
+               method = "REML",
+               weights = varIdent(form =~ 1 | batch))
+
+M1c.gls <- gls(corrected_consumption ~ treatment + batch + treatment:batch,
+               data = sucrose,
+               method = "REML",
+               weights = varIdent(form =~ 1 | treatment))
+
+AIC(M1.gls, M1a.gls, M1b.gls, M1c.gls)
+
+anova(M1.gls, M1b.gls)
+
+# no varIdent structure is a significant improvement
+```
+
+As there are still patterns of heterogeneity for batch and colony. Add random and variance structures to the model and see if they improve the model validation plots. 
+
+```{r}
+# variance structures
+M2a.lme <- lme(corrected_consumption ~ batch + treatment,
+               data = sucrose,
+               random =~1 | colony_derived_from, method = "REML",
+               weights = varIdent(form =~ 1 | batch*treatment))
+
+# extract residuals
+E <- resid(M2a.lme, type = "normalized")
+
+# residuals vs fitted
+plot(M2a.lme, which = c (1))
+
+op <- par(mfrow = c(2, 2))
+
+boxplot(E ~ sucrose$treatment, main = "Treatment")
+abline(0, 0)
+
+boxplot(E ~ sucrose$batch, main = "Batch")
+abline(0, 0)
+
+boxplot(E ~ sucrose$treatment * sucrose$batch, main = "Treatment & Batch")
+abline(0, 0)
+
+boxplot(E ~ sucrose$colony_derived_from, main = "Colony")
+abline(0, 0)
+
+par(op)
+```
+
+Heterogeneity looks a lot better if colony is included as random intercept and batch*treatment as a variance structure. 
+
+```{r}
+# manual 
+M3a.lme <- lme(corrected_consumption ~ batch + treatment + treatment:batch,
+               data = sucrose,
+               random =~1 | colony_derived_from, method = "ML",
+               weights = varIdent(form =~ 1 | batch*treatment))
+
+# round 1
+M3a.lme.a <- update(M3a.lme, .~. - treatment:batch)
+
+anova(M3a.lme, M3a.lme.a)
+
+# round 2 
+M3a.lme.b <- update(M3a.lme.a, .~. - treatment)
+M3a.lme.c <- update(M3a.lme.a, .~. - batch)
+
+anova(M3a.lme.a, M3a.lme.b)
+anova(M3a.lme.a, M3a.lme.c)
+```
+
+Adding in the random and variance structures, which are both required for heterogeneity and due to experimental design, means nothing is significant.
+
+M3a.lme.a final model. Interaction term was not significant.
+
+Standard error extracted using these sources
+
+[ref 1](https://stat.ethz.ch/pipermail/r-sig-mixed-models/2012q1/017530.html)
+[ref 2](https://stackoverflow.com/questions/14358811/extract-prediction-band-from-lme-fit)
+
+Only based on fixed component of the model.
+
+```{r}
+M3a.lme.a <- lme(corrected_consumption ~ batch + treatment,
+               data = sucrose,
+               random =~1 | colony_derived_from, method = "REML",
+               weights = varIdent(form =~ 1 | batch*treatment))
+
+summary(M3a.lme.a)
+```
+
+```{r}
+# gtsummary doesn't work for lme M3a.lme.as so create summary table manually
+M3a.lme.a_summary_tab <- broom.mixed::tidy(x = M3a.lme.a)
+
+# change multiplication factors to residual variance in each group
+M3a.lme.a_summary_tab [7:12, 4] <- M3a.lme.a_summary_tab [7:12, 4] * summary(M3a.lme.a)$sigma
+
+M3a.lme.a_summary_tab <- M3a.lme.a_summary_tab [-6, ]
+
+
+M3a.lme.a_summary_tab [5, 3] <- paste("colony.", M3a.lme.a_summary_tab [5, 3], sep = "")
+
+sequence <- 6:11
+
+for (i in 1:length(sequence)) {
+  
+  M3a.lme.a_summary_tab [sequence [i], 3] <- paste("varIdent.", M3a.lme.a_summary_tab [sequence [i], 3], sep = "")
+  
+}
+
+M3a.lme.a_summary_tab <-  M3a.lme.a_summary_tab [c(1:4, 6:11, 5), ]
+
+library(kableExtra)
+
+options(knitr.kable.NA = '_')
+
+sucrose_consumption_model_plot <- kbl(M3a.lme.a_summary_tab [, 3:ncol(M3a.lme.a_summary_tab)], digits = 3) %>%
+                                      kable_styling() %>%
+                                      add_header_above(header = c("Summary of LMM for sucrose consumption" = 6))
+
+save_kable(sucrose_consumption_model_plot, "output/sucrose_consumption_model.pdf")
+```
+
+```{r}
+# summary(M3a.lme.a)
+
+newdat <- expand.grid(treatment=levels(sucrose$treatment), batch=levels(sucrose$batch))
+
+newdat$pred <- predict(M3a.lme.a, newdat, level = 0)
+
+Designmat <- model.matrix(eval(eval(M3a.lme.a$call$fixed)[-2]), newdat[-3])
+
+predvar <- diag(Designmat %*% M3a.lme.a$varFix %*% t(Designmat))
+
+newdat$SE <- sqrt(predvar)
+
+newdat$ci_lower <- newdat$pred - (1.96 * newdat$SE) # 1.96 or qt(1 - (0.05 / 2), n - 1)?
+
+newdat$ci_higher <- newdat$pred + (1.96 * newdat$SE) # 1.96 or qt(1 - (0.05 / 2), n - 1)?
+
+batch_one_only <- newdat [newdat$batch == "1", ]
+
+```
+
+Treatment Plot
+
+```{r}
+# ggplot
+p1_sucrose_treat <- ggplot(data = batch_one_only, aes(x = treatment, y = pred, colour = as.factor(treatment))) + 
+  
+  geom_point(position = position_dodge(width = 0.75), size = 3) +
+  
+  geom_errorbar(aes(x = treatment,
+                    ymin = ci_lower,
+                    ymax = ci_higher,
+                    colour = as.factor(treatment)),
+                position = position_dodge(width = 0.75),
+                width = 0.05, 
+                size = 0.8) +
+  
+  geom_point(data = sucrose,
+             aes(x = treatment,
+                 y = corrected_consumption,
+                 colour = as.factor(treatment)),
+             alpha = 0.4,
+             position  = position_jitterdodge(),
+             show.legend = FALSE) +
+  
+  theme_bw() +
+
+  labs(y = "Average sucrose consumption/microcolony/bee (mg)", colour = "Treatment") +
+    
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    
+  ggtitle("Average sucrose consumption") +
+    
+  theme(axis.title.x = element_blank(),
+        legend.position = "none") +
+  
+  scale_color_manual(values = c("#117733", "#332288"), labels = c("Control", "Flupyradifurone")) +
+  
+  scale_x_discrete(labels=c("Control", "Flupyradifurone"))
+  
+ # annotate(geom = "text", x = 2.32, y = 4100, label = "bolditalic('p')~bold('= 0.248')", fontface = 2, size = 6, parse = TRUE)
+
+p1_sucrose_treat
+```
+
+Now a batch plot for treatment=control
+
+```{r}
+control_only <- newdat [newdat$treatment == "control", ]
+
+p_sucrose_batch <- ggplot(data = control_only, aes(x = batch, y = pred, colour = as.factor(batch))) + 
+  
+  geom_point(position = position_dodge(width = 0.75), size = 3) +
+  
+  geom_errorbar(aes(x = batch,
+                    ymin = ci_lower,
+                    ymax = ci_higher,
+                    colour = as.factor(batch)),
+                position = position_dodge(width = 0.75),
+                width = 0.05, 
+                size = 0.8) +
+  
+  geom_point(data = sucrose,
+             aes(x = batch,
+                 y = corrected_consumption,
+                 colour = as.factor(batch)),
+             alpha = 0.4,
+             position  = position_jitterdodge(),
+             show.legend = FALSE) +
+  
+  theme_bw() +
+
+  labs(y = "Average sucrose consumption/microcolony/bee (mg)", colour = "Batch", x = "Batch") +
+    
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    
+  ggtitle("Average sucrose consumption") +
+    
+  theme(legend.position = "none") +
+  
+  scale_color_manual(values = c("#88CCEE", "#CC6677", "#DDCC77"))
+
+  # annotate(geom = "text", x = 3.25, y = 4100, label = "bolditalic('p')~bold('= 0.053')", fontface = 2, size = 6, parse = TRUE)
+
+p_sucrose_batch
+```
+
+```{r}
+pdf(file = "output/sucrose_consumption_batch.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+p1_sucrose_treat
+
+ dev.off()
+ 
+pdf(file = "output/sucrose_consumption_treatment.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+p_sucrose_batch
+
+ dev.off()
+```
+
+--------------------------------------------------------------------------------
+
+Pollen consumption
+
+```{r}
+pollen <- read.csv("input/pollen_consumption_corrected_long.csv")
+
+# x1000 for mg
+pollen$corrected_consumption <- pollen$corrected_consumption * 1000
+```
+
+First correct day consumption values for worker number. 
+
+```{r}
+worker_number <- read.csv("input/number_of_workers_each_day.csv")
+
+# convert into long format
+day <- c("1", "2", "4", "6", "8", "10")
+
+worker_long <- tibble()
+
+for (i in 1:length(day)) {
+  
+  worker_temp <- worker_number [, c(1:5, 5+i)]
+  
+  worker_temp$day <- day [i]
+  
+  colnames(worker_temp) [6] <- "worker_number"
+  
+  worker_long <- rbind(worker_long, worker_temp)
+  
+}
+
+# create microcolony_day variable for worker_long and pollen
+worker_long$mc_day <- paste0(worker_long$microcolony.number, "_", worker_long$day)
+
+pollen$mc_day <- paste0(pollen$microcolony_number, "_", pollen$day)
+
+# associate the worker number with the pollen dataframe. below says for each row of pollen df
+# scan each row of the worker_long df. if there is a match between the mc_day unique identifier
+# then put the worker number value for that row of worker_long into the matched row of pollen df
+pollen$worker_number <- 0
+
+for (i in 1:nrow(pollen)) {
+  
+  for (k in 1:nrow(worker_long)) {
+    
+      if (pollen$mc_day [i] == worker_long$mc_day [k]) {pollen$worker_number [i] <- worker_long$worker_number [k]}
+    
+  }
+}
+
+# remove mc_day from pollen
+pollen <- pollen [,-7]
+
+# divide corrected consumption values by number of bees present
+pollen$corrected_consumption <- pollen$corrected_consumption / pollen$worker_number
+```
+
+Calculate average total consumption per bee per microcolony. May be more accurate to describe this as total pollen processed per bee per microcolony.
+
+```{r}
+# sum consumption by MC
+tot_con <- tibble()
+
+microcolony_numbers <- unique(pollen$microcolony_number)
+
+for (i in 1:length(microcolony_numbers)) {
+  
+  if (length(pollen$corrected_consumption [pollen$microcolony_number == microcolony_numbers [i]]) == 6) {
+
+  filtered_con <- cbind(sum(pollen$corrected_consumption [pollen$microcolony_number == microcolony_numbers [i]]), microcolony_numbers [i])
+  
+  tot_con <- rbind(tot_con, filtered_con)
+  
+  }
+
+}
+
+# re-associate these MC values with colony, batch etc information
+batch_col_info <- unique(pollen [, c(1,2,3,4)])
+
+batch_col_info$corrected_consumption <- 0 
+
+for (i in 1:nrow(tot_con)) {
+  
+  for (k in 1:nrow(batch_col_info)) {
+    
+    if (tot_con [i, 2] == batch_col_info [k, 1]) {
+      
+      batch_col_info$corrected_consumption [k] <- tot_con [i, 1] 
+      
+    }
+    
+  }
+  
+}
+
+# remove 0s (these had spills) and rename data
+pollen <- batch_col_info
+
+pollen <- pollen [pollen$corrected_consumption > 0, ]
+```
+
+```{r}
+# sort out the variable classes
+pollen$microcolony_number <- as.factor(pollen$microcolony_number)
+pollen$batch <- as.factor(pollen$batch)
+pollen$colony_derived_from <- as.factor(pollen$colony_derived_from)
+pollen$treatment <- as.factor(pollen$treatment)
+```
+
+Now begin analysis. At this point I have corrected the consumption values to account for number of bees present on particular day, summed those values and removed any MCs that didn't have full consumption dataset. 
+
+Bit of exploratory analysis first
+
+```{r}
+# Cleveland Dot Plot. First make column with 1 and 2 that correspond to Treatment levels
+
+pollen$clevelandcode <- factor(
+ifelse(pollen$treatment == "control",
+1,
+2))
+
+pollen$clevelandcode <- as.numeric(pollen$clevelandcode)
+
+dotchart(pollen$corrected_consumption,
+         groups = factor(pollen$clevelandcode),
+         ylab = "Order of observations",
+         xlab = "Consumption (mg)", main = "Cleveland dotplot", pch = pollen$clevelandcode)
+
+boxplot(corrected_consumption ~ treatment * batch,
+        varwidth = TRUE, xlab = "TreatmentxBatch",
+        main = "Boxplot of Consumption Conditional on Treatment and Batch", 
+        ylab = "Consumption", data = pollen)
+
+boxplot(corrected_consumption ~ batch,
+        varwidth = TRUE, xlab = "Batch",
+        main = "Boxplot of Consumption Conditional on Batch", 
+        ylab = "Consumption", data = pollen)
+
+boxplot(corrected_consumption ~ treatment,
+        varwidth = TRUE, xlab = "Treatment",
+        main = "Boxplot of Consumption Conditional on Treatment", 
+        ylab = "Consumption", data = pollen)
+```
+
+Batch 2 appears to have smaller spread, which is mainly driven by fpf-batch2. 
+
+Let's fit beyond optimal model. 
+
+```{r}
+library(nlme)
+
+M1.gls <- gls(corrected_consumption ~ treatment + batch + treatment:batch, data = pollen, method = "REML")
+
+E <- resid(M1.gls)
+
+op <- par(mfrow = c(2, 2))
+
+boxplot(E ~ pollen$treatment, main = "Treatment")
+abline(0, 0)
+
+boxplot(E ~ pollen$batch, main = "Batch")
+abline(0, 0)
+
+boxplot(E ~ pollen$treatment * pollen$batch, main = "Treatment & Batch")
+abline(0, 0)
+
+boxplot(E ~ pollen$colony_derived_from, main = "Colony")
+abline(0, 0)
+
+par(op)
+
+plot(M1.gls, which = c (1))
+```
+
+Colony residual plot suggests colony can be included as a random intercept. Maybe batch in a varIdent structure but doubt it. 
+
+```{r}
+# random intercept?
+M1.lme <- lme(corrected_consumption ~ treatment + batch + treatment:batch, data = pollen, 
+              random = ~1 | colony_derived_from, method = "REML")
+
+AIC(M1.gls, M1.lme)
+
+anova(M1.gls, M1.lme)
+
+# What about the variance structure?
+M1a.gls <- gls(corrected_consumption ~ treatment + batch + treatment:batch,
+               data = pollen,
+               method = "REML",
+               weights = varIdent(form =~ 1 | treatment*batch))
+
+M1b.gls <- gls(corrected_consumption ~ treatment + batch + treatment:batch,
+               data = pollen,
+               method = "REML",
+               weights = varIdent(form =~ 1 | batch))
+
+AIC(M1.gls, M1a.gls, M1b.gls)
+
+anova(M1.gls, M1b.gls)
+
+anova(M1.gls, M1a.gls)
+
+# no varIdent structure is a significant improvement
+```
+
+My starting model for model selection is M1.lme
+
+```{r}
+M1.lme <- lme(corrected_consumption ~ treatment + batch + treatment:batch, data = pollen, 
+              random = ~1 | colony_derived_from, method = "ML")
+```
+
+Indicates batch is significant. Now manually
+
+```{r}
+# manual 
+
+# round 1
+M1.lme.a <- update(M1.lme, .~. - treatment:batch)
+
+anova(M1.lme, M1.lme.a)
+
+# round 2 
+M1.lme.b <- update(M1.lme.a, .~. - treatment)
+M1.lme.c <- update(M1.lme.a, .~. - batch)
+
+anova(M1.lme.a, M1.lme.b)
+anova(M1.lme.a, M1.lme.c)
+
+```
+
+Nothing is significant. Leave in treatment and batch as part of expt design. Graphical Model Validation
+
+```{r}
+M1.lme.a <- update(M1.lme.a, method = "REML")
+
+# extract residuals
+E <- resid(M1.lme.a, type = "normalized")
+
+# residuals vs fitted
+plot(M1.lme.a, which = c (1))
+
+op <- par(mfrow = c(2, 2))
+
+boxplot(E ~ pollen$treatment, main = "Treatment")
+abline(0, 0)
+
+boxplot(E ~ pollen$batch, main = "Batch")
+abline(0, 0)
+
+boxplot(E ~ pollen$treatment * pollen$batch, main = "Treatment & Batch")
+abline(0, 0)
+
+boxplot(E ~ pollen$colony_derived_from, main = "Colony")
+abline(0, 0)
+
+par(op)
+```
+
+Treatment * Batch plot is now not great. Add VarIdent structure.
+
+```{r}
+M1.lme.a <- lme(corrected_consumption ~ treatment + batch,
+               data = pollen,
+               random =~1 | colony_derived_from, method = "REML",
+               weights = varIdent(form =~ 1 | batch*treatment))
+
+# summary(M1.lme.a)
+
+# extract residuals
+E <- resid(M1.lme.a , type = "response")
+
+# residuals vs fitted
+plot(M1.lme.a , which = c (1))
+
+op <- par(mfrow = c(2, 2))
+
+boxplot(E ~ pollen$treatment, main = "Treatment")
+abline(0, 0)
+
+boxplot(E ~ pollen$batch, main = "Batch")
+abline(0, 0)
+
+boxplot(E ~ pollen$treatment * pollen$batch, main = "Treatment & Batch")
+abline(0, 0)
+
+boxplot(E ~ pollen$colony_derived_from, main = "Colony")
+abline(0, 0)
+
+par(op)
+
+```
+
+The VarIdent structure didn't help really. Go forward with no VarIdent.
+
+```{r}
+M1.lme.a <- lme(corrected_consumption ~ treatment + batch,
+               data = pollen,
+               random =~1 | colony_derived_from, method = "REML")
+```
+
+```{r}
+# gtsummary doesn't work for lme M1.lme.as so create summary table manually
+M1.lme.a_summary_tab <- broom.mixed::tidy(x = M1.lme.a)
+
+M1.lme.a_summary_tab [5, 3] <- paste("colony.", M1.lme.a_summary_tab [5, 3], sep = "")
+
+M1.lme.a_summary_tab <- M1.lme.a_summary_tab [1:5, ]
+
+library(kableExtra)
+
+options(knitr.kable.NA = '_')
+
+pollen_consumption_model_plot <- kbl(M1.lme.a_summary_tab [, 3:ncol(M1.lme.a_summary_tab)], digits = 3) %>%
+                                      kable_styling() %>%
+                                      add_header_above(header = c("Summary of LMM for pollen consumption" = 6))
+
+save_kable(pollen_consumption_model_plot, "output/pollen_consumption_model.pdf")
+```
+
+Extract Predictions and SE for fixed effect component of model. 
+
+```{r}
+M1.lme.a <- lme(corrected_consumption ~ treatment + batch,
+               data = pollen,
+               random =~1 | colony_derived_from, method = "REML")
+
+# summary(M1.lme.a)
+
+newdat <- expand.grid(treatment=levels(pollen$treatment), batch=levels(pollen$batch))
+
+newdat$pred <- predict(M1.lme.a, newdat, level = 0)
+
+Designmat <- model.matrix(eval(eval(M1.lme.a$call$fixed)[-2]), newdat[-3])
+
+predvar <- diag(Designmat %*% M1.lme.a$varFix %*% t(Designmat))
+
+newdat$SE <- sqrt(predvar)
+
+newdat$ci_lower <- newdat$pred - (1.96 * newdat$SE) # 1.96 or qt(1 - (0.05 / 2), n - 1)?
+
+newdat$ci_higher <- newdat$pred + (1.96 * newdat$SE) # 1.96 or qt(1 - (0.05 / 2), n - 1)?
+```
+
+```{r}
+batch_one_only <- newdat [newdat$batch == "1", ]
+
+# ggplot
+p1_pollen_treat <- ggplot(data = batch_one_only, aes(x = treatment, y = pred, colour = as.factor(treatment))) + 
+  
+  geom_point(position = position_dodge(width = 0.75), size = 3) +
+  
+  geom_errorbar(aes(x = treatment,
+                    ymin = ci_lower,
+                    ymax = ci_higher,
+                    colour = as.factor(treatment)),
+                position = position_dodge(width = 0.75),
+                width = 0.05, 
+                size = 0.8) +
+  
+  geom_point(data = pollen,
+             aes(x = treatment,
+                 y = corrected_consumption,
+                 colour = as.factor(treatment)),
+             alpha = 0.4,
+             position  = position_jitterdodge(),
+             show.legend = FALSE) +
+  
+  theme_bw() +
+
+  labs(y = "Average pollen consumption/microcolony/bee (mg)", colour = "Treatment") +
+    
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    
+  ggtitle("Average pollen consumption") +
+    
+  theme(axis.title.x = element_blank(),
+        legend.position = "none") +
+  
+  scale_color_manual(values = c("#117733", "#332288"), labels = c("Control", "Flupyradifurone")) +
+  
+  scale_x_discrete(labels=c("Control", "Flupyradifurone")) # + 
+  
+  # annotate(geom = "text", x = 2.32, y = 145, label = "bolditalic('p')~bold('= 0.344')", fontface = 2, size = 6, parse = TRUE)
+
+p1_pollen_treat
+
+```
+
+Now a batch plot for treatment=control
+
+```{r}
+control_only <- newdat [newdat$treatment == "control", ]
+
+p_pollen_batch <- ggplot(data = control_only, aes(x = batch, y = pred, colour = as.factor(batch))) + 
+  
+  geom_point(position = position_dodge(width = 0.75), size = 3) +
+  
+  geom_errorbar(aes(x = batch,
+                    ymin = ci_lower,
+                    ymax = ci_higher,
+                    colour = as.factor(batch)),
+                position = position_dodge(width = 0.75),
+                width = 0.05, 
+                size = 0.8) +
+  
+  geom_point(data = pollen,
+             aes(x = batch,
+                 y = corrected_consumption,
+                 colour = as.factor(batch)),
+             alpha = 0.4,
+             position  = position_jitterdodge(),
+             show.legend = FALSE) +
+  
+  theme_bw() +
+
+  labs(y = "Average pollen consumption/microcolony/bee (mg)", colour = "Batch", x = "Batch") +
+    
+  # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    
+  ggtitle("Average pollen consumption") +
+    
+  theme(legend.position = "none") +
+  
+  scale_color_manual(values = c("#88CCEE", "#CC6677", "#DDCC77")) # + 
+
+  # annotate(geom = "text", x = 3.25, y = 115, label = "bolditalic('p')~bold('= 0.072')", fontface = 2, size = 6, parse = TRUE)
+
+p_pollen_batch
+```
+
+```{r}
+pdf(file = "output/pollen_consumption_batch.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+p1_pollen_treat
+
+ dev.off()
+ 
+pdf(file = "output/pollen_consumption_treatment.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+p_pollen_batch
+
+ dev.off()
+```
+
+Combo plots for pollen and treatment consumption
+
+```{r}
+# treatment
+plot_grid(p1_sucrose_treat, p1_pollen_treat, labels = c('A', 'B'))
+
+# batch
+plot_grid(p_sucrose_batch, p_pollen_batch, labels = c('A', 'B'))
+
+# treatment
+pdf(file = "output/consumption_treatment.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+plot_grid(p1_sucrose_treat, p1_pollen_treat, labels = c('A', 'B'))
+
+ dev.off()
+ 
+# batch 
+pdf(file = "output/consumption_batch.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+plot_grid(p_sucrose_batch, p_pollen_batch, labels = c('A', 'B'))
+
+ dev.off()
+
+```
+
+Pollen and nectar degradation models parameter estimates
+
+Nectar
+
+```{r}
+library(kableExtra)
+
+nectar_mod_deg_tab <- read.csv("input/nectar_dfop_table.csv")
+
+colnames(nectar_mod_deg_tab) [4:8] <- c("Prob. >t", "Lower 90% CI", "Upper 90% CI", "Lower 95% CI", "Upper 95% CI")
+
+options(knitr.kable.NA = '_')
+
+nectar_mod_deg_tab_plot <- kbl(nectar_mod_deg_tab [1:4, c(1:4, 7:8)], digits = 3) %>%
+                                      kable_styling() %>%
+                                      add_header_above(header = c("Summary of DFOP model for FPF degradation in nectar" = 6))
+
+nectar_mod_deg_tab_plot
+
+save_kable(nectar_mod_deg_tab_plot, "output/nectar_dfop_model.pdf")
+```
+
+Pollen
+
+```{r}
+pollen_mod_deg_tab <- read.csv("input/pollen_fomc_table.csv")
+
+colnames(pollen_mod_deg_tab) [4:8] <- c("Prob. >t", "Lower 90% CI", "Upper 90% CI", "Lower 95% CI", "Upper 95% CI")
+
+options(knitr.kable.NA = '_')
+
+pollen_mod_deg_tab_plot <- kbl(pollen_mod_deg_tab [1:3, c(1:4, 7:8)], digits = 3) %>%
+                                      kable_styling() %>%
+                                      add_header_above(header = c("Summary of FOMC model for FPF degradation in pollen" = 6))
+
+pollen_mod_deg_tab_plot
+
+save_kable(pollen_mod_deg_tab_plot, "output/pollen_fomc_model.pdf")
+```
+
+Exposure regime table
+
+```{r}
+exp_reg_tab <- read.csv("input/exposure_regime.csv")
+
+colnames(exp_reg_tab) [2:7] <- c("[t0]", "[t24]", "[t48]", "[t96]", "[t144]", "[t192]")
+
+options(knitr.kable.NA = '_')
+
+exp_reg_tab <- kbl(exp_reg_tab, digits = 3) %>%
+                                      kable_styling() %>%
+                                      add_header_above(header = c("FPF concentrations (ppb) in nectar and pollen across the exposure period" = 7))
+
+exp_reg_tab
+
+save_kable(exp_reg_tab, "output/exposure_period_summary.pdf")
+```
+
+EU database search overview
+
+```{r}
+database_search_over <- read.csv("../conference_poster_tables/input/database_overview_table_aggregated.csv")
+
+colnames(database_search_over) <- c("Insecticide", "Countries approved in without full flowering window restrictions",
+                                    "Crops approved in without full flowering window restrictions")
+
+options(knitr.kable.NA = '_')
+
+database_search_over_tab <- kbl(database_search_over, digits = 3) %>%
+                                      kable_styling() %>%
+                                      add_header_above(header = c("EU pesticide databases search output" = 3))
+
+database_search_over_tab
+
+save_kable(database_search_over_tab, "output/database_search_output.pdf")
+```
+

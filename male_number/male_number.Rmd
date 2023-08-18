@@ -238,7 +238,7 @@ library(tidyverse)
 batch_one_only <- newdat [newdat$batch == "1", ]
 
 # ggplot
-p1 <- ggplot(data = batch_one_only, aes(x = treatment, y = pred_resp, colour = as.factor(treatment))) + 
+p1_male_num <- ggplot(data = batch_one_only, aes(x = treatment, y = pred_resp, colour = as.factor(treatment))) + 
   
   geom_point(position = position_dodge(width = 0.75), size = 3) +
   
@@ -266,25 +266,23 @@ p1 <- ggplot(data = batch_one_only, aes(x = treatment, y = pred_resp, colour = a
     
   # ggtitle("Male Number") +
     
-  theme(plot.title = element_text(hjust = 0.5), axis.title.x = element_blank()) +
-  
   scale_color_manual(values = c("#117733", "#332288")) +
   
   ggtitle("Male Number") +
   
-  theme(plot.title = element_text(hjust = 0.5, size = 36, face = "bold"),
+  theme(plot.title = element_text(size = 14),
         axis.title.x = element_blank(),
-        axis.title.y = element_text(size=24, face = "bold"),
+        axis.title.y = element_text(size=12),
         legend.position = "none", 
-        axis.text.x = element_text(size=24, color = "black", face = "bold"),
+        axis.text.x = element_text(size=12, color = "black"),
         axis.text.y = element_text(color = "black"),
         panel.grid = element_blank()) +
   
-  annotate(geom = "text", x = 2.4, y = 0, label = "bolditalic('p')~bold('= 0.65')", fontface = 2, size = 6, parse = TRUE) +
+  # annotate(geom = "text", x = 2.4, y = 0, label = "bolditalic('p')~bold('= 0.65')", fontface = 2, size = 6, parse = TRUE) +
   
   scale_x_discrete(labels = c("Control", "Flupyradifurone"))
 
-p1
+p1_male_num
 ```
 
 Now for batch when treatment=control
@@ -351,7 +349,6 @@ p
  dev.off()
 ```
 
-
 Report the probability of false zeros is exp(-0.873) / 1 + exp(-0.873). This is 0.295. 
 
 Probabilities have to add to 1. The full range of outcomes is false zero, true zero and count. 
@@ -406,6 +403,5 @@ p_not_true_zero <- 1 - dnbinom(x = 0, size = 5.63, mu = exp(1.576))
 
 # should = 1
 p_false_zero + (p_not_false_zero*p_true_zero) + (p_not_false_zero*p_not_true_zero)
-
 ```
 

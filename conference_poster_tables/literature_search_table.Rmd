@@ -99,7 +99,7 @@ Database Table Second
 ```{r, echo=FALSE}
 table_1 <- flextable(database_overview_table)
 
-table_1 <- add_header_row(table_1, values = c("EU Database Search Overview"), colwidths = c(6))
+table_1 <- add_header_row(table_1, values = c("National Pesticide Databases Search Overview"), colwidths = c(6))
 
 table_1 <- fontsize(table_1, i = 1, j = NULL, size = 18, part = "header")
 

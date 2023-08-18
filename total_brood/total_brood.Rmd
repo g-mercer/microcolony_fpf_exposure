@@ -46,21 +46,53 @@ ifelse(brood$treatment == "control",
 
 brood$clevelandcode <- as.numeric(brood$clevelandcode)
 
+par(mfrow = c(1, 3))
+
 # first boxplots of individual stages 
 boxplot(eggs ~ treatment,
         varwidth = TRUE, xlab = "Treatment",
-        main = "Boxplot of Egg Number Conditional on Treatment", 
-        ylab = "Number of Eggs", data = brood)
+        main = "Egg number by treatment", 
+        ylab = "Number of eggs", data = brood,
+        names=c("Control","Flupyradifurone"))
 
 boxplot(larvae ~ treatment,
         varwidth = TRUE, xlab = "Treatment",
-        main = "Boxplot of Larvae Number Conditional on Treatment", 
-        ylab = "Number of Larvae", data = brood)
+        main = "Larvae number by treatment", 
+        ylab = "Number of larvae", data = brood,
+        names=c("Control","Flupyradifurone"))
 
 boxplot(pupae ~ treatment,
         varwidth = TRUE, xlab = "Treatment",
-        main = "Boxplot of Pupae Number Conditional on Treatment", 
-        ylab = "Number of Pupae", data = brood)
+        main = "Pupae number by treatment", 
+        ylab = "Number of pupae", data = brood,
+        names=c("Control","Flupyradifurone"))
+
+pdf(file = "life_stage_comparison.pdf",   # The directory you want to save the file in
+  width = 8, # The width of the plot in inches
+  height = 6) # The height of the plot in inches
+
+par(mfrow = c(1, 3))
+
+# first boxplots of individual stages 
+boxplot(eggs ~ treatment,
+        varwidth = TRUE, xlab = "Treatment",
+        main = "Egg number by treatment", 
+        ylab = "Number of eggs", data = brood,
+        names=c("Control","Flupyradifurone"))
+
+boxplot(larvae ~ treatment,
+        varwidth = TRUE, xlab = "Treatment",
+        main = "Larvae number by treatment", 
+        ylab = "Number of larvae", data = brood,
+        names=c("Control","Flupyradifurone"))
+
+boxplot(pupae ~ treatment,
+        varwidth = TRUE, xlab = "Treatment",
+        main = "Pupae number by treatment", 
+        ylab = "Number of pupae", data = brood,
+        names=c("Control","Flupyradifurone"))
+
+ dev.off()
 
 # now bloxplot of total brood
 boxplot(total_brood ~ treatment,

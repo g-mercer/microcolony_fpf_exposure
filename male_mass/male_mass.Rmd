@@ -227,7 +227,7 @@ newdat$ci_higher <- newdat$pred + (1.96 * newdat$SE) # 1.96 or qt(1 - (0.05 / 2)
 batch_one_only <- newdat [newdat$batch == "1", ]
 
 # ggplot
-p1 <- ggplot(data = batch_one_only, aes(x = treatment, y = pred, colour = as.factor(treatment))) + 
+p1_male_mass <- ggplot(data = batch_one_only, aes(x = treatment, y = pred, colour = as.factor(treatment))) + 
   
   geom_point(position = position_dodge(width = 0.75), size = 3) +
   
@@ -253,19 +253,18 @@ p1 <- ggplot(data = batch_one_only, aes(x = treatment, y = pred, colour = as.fac
     
   # theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
     
-  ggtitle("Male Mass By Treatment") +
+  ggtitle("Male Mass") +
     
-  theme(plot.title = element_text(hjust = 0.5), axis.title.x = element_blank()) +
+  theme(axis.title.x = element_blank()) +
   
   scale_color_manual(values = c("#117733", "#332288"), labels = c("Control", "Flupyradifurone")) +
   
-  scale_x_discrete(labels=c("Control", "Flupyradifurone")) +
+  scale_x_discrete(labels=c("Control", "Flupyradifurone"))
   
-  annotate(geom = "text", x = 2.35, y = 47, label = "bolditalic('p')~bold('= 0.699')", fontface = 2, size = 6, parse = TRUE)
+  # annotate(geom = "text", x = 2.35, y = 47, label = "bolditalic('p')~bold('= 0.699')", fontface = 2, size = 6, parse = TRUE)
 
 
-p1
-
+p1_male_mass
 ```
 
 Now a batch plot for treatment=control
