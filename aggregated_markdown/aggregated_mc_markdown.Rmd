@@ -1689,7 +1689,7 @@ pdf(file = "output/survival_batch_plot.pdf",   # The directory you want to save 
   width = 8, # The width of the plot in inches
   height = 6) # The height of the plot in inches
 
-p1_surv_treat
+p2_surv_batch
 
  dev.off()
  
@@ -1697,7 +1697,7 @@ pdf(file = "output/survival_treatment_plot.pdf",   # The directory you want to s
   width = 8, # The width of the plot in inches
   height = 6) # The height of the plot in inches
 
-p2_surv_batch
+p1_surv_treat
 
  dev.off()
 ```
@@ -2710,3 +2710,42 @@ database_search_over_tab
 save_kable(database_search_over_tab, "output/database_search_output.pdf")
 ```
 
+```{r}
+app_regs <- read.csv("../conference_poster_tables/input/approved_eu_application_regimes.csv")
+
+colnames(app_regs) <- c("Country", "Delivery method", "Concentration (g/l)", "Crop", "Application volume (l/ha)",
+                        "Application frequency", "Mass of active substance per application (g a.i./ha)")
+
+options(knitr.kable.NA = '_')
+
+app_regs_tab <- kbl(app_regs, digits = 3) %>%
+                                      kable_styling() %>%
+                                      add_header_above(header = c("Median application regime by country for Sivanto Prime" = 7))
+
+app_regs_tab
+
+save_kable(app_regs_tab, "output/application_regimes.pdf")
+
+```
+
+Table for degradation datasets
+
+```{r}
+deg_datasets <- read.csv("../conference_poster_tables/input/dar_degradation_datasets.csv")
+
+colnames(deg_datasets) <- c("Study ID", "Crop", "Application rate", "Measurement window start nectar", "Measurement window end nectar",
+                            "Number of timepoints nectar", "Measurement window start pollen", "Measurement window end pollen",
+                            "Number of timepoints pollen")
+
+options(knitr.kable.NA = '_')
+
+deg_datasets_tab <- kbl(deg_datasets, digits = 3) %>%
+                                      kable_styling() %>%
+                                      add_header_above(header = c("Public degradation datasets for Sivanto Prime" = 9))
+
+deg_datasets_tab
+
+save_kable(deg_datasets_tab, "output/deg_datasets.pdf")
+
+
+```
