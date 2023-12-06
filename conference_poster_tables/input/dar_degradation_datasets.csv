@@ -1,1 +1,9 @@
-/Users/guymercer/db/microcolony_main/eu_databases_search_csvs/dar_degradation_datasets.csv
+﻿Study ID,Crop,Application Rate,Measurement Window Start Nectar,Measurement Window End Nectar,Number of Timepoints Nectar,Measurement Window Start Pollen,Measurement Window End Pollen,Number of Timepoints Pollen
+KIIA 8.16.2/08,Phacelia,2 x 200 g a.s./ha (foliar spray) ,DALA -1,DALA 10,14,DALA -1,DALA 10,13
+KIIIA 10.4.5/01,OSR,"10 g a.s./kg OSR seeds (seed treatment), 1 x 300 g a.s./ha (soil application), 2 x205 g a.s./ha (foliar spray) ",DALA -6,DALA 11,18,DALA -4,DALA 11,16
+KIIIA 10.4.5/02 ,OSR,"10.1 g a.s./kg OSR seeds (seed treatment), 1 x 300 g a.s./ha (soil application), 2 x 205 g a.s./ha (foliar spray) ",DALA -8,DALA 19,28,DALA -9,DALA 20,29
+KIIA 8.16.2/04 T1,Melon,1 x 410 g a.s./ha (drench) ,DAA 19,DAA 34,8,DAA 19,DAA 13,6
+KIIA 8.16.2/04 T2,Melon,2 x 205 g a.s./ha (foliar),DAA1 +1,DAA2 +7,8,DAA1 +1,DAA2 +3,4
+KIIA 8.16.2/05 ,Watermelon,3 x 150g a.s./ha (drench),DAA 34,DAA 48,3,DAA 34,DAA 48,3
+KIIA 8.16.2/06,Tomato,1 x 200g a.s./ha (drench),n/a,n/a,n/a,DAA 42,DAA 84,10
+KIIA 8.16.2/07,Watermelon,1 x 200g a.s./ha (drench),DAA 57,DAA 71,5,DAA 57,DAA 71,5

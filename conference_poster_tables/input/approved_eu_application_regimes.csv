@@ -1,1 +1,82 @@
-/Users/guymercer/db/microcolony_main/eu_databases_search_csvs/approved_eu_application_regimes.csv
+﻿Country,Delivery Method,Concentration (g/l),Crop,Application Volume (l/ha),Application Frequency,Mass of Active Substance Per Application (g a.s./ha)
+Czech Republic,Foliar Spray,200,apple,0.6,biennial,120
+Czech Republic,Foliar Spray,200,apple,0.4,biennial,80
+Czech Republic,Foliar Spray,200,pear,0.6,biennial,120
+Czech Republic,Foliar Spray,200,vine,0.5,biennial,100
+Hungary,Foliar Spray,200,apple,0.4,annual,80
+Hungary,Foliar Spray,200,quince,0.4,annual,80
+Hungary,Foliar Spray,200,medlar,0.4,annual,80
+Hungary,Foliar Spray,200,pear,0.4,annual,80
+Hungary,Foliar Spray,200,apple,0.6,biennial,120
+Hungary,Foliar Spray,200,quince,0.6,biennial,120
+Hungary,Foliar Spray,200,medlar,0.6,biennial,120
+Hungary,Foliar Spray,200,pear,0.6,biennial,120
+Hungary,Foliar Spray,200,pear,0.9,biennial,180
+Hungary,Foliar Spray,200,grape,0.4,annual,80
+Hungary,Foliar Spray,200,grape,0.5,annual,100
+Hungary,Foliar Spray,200,ornamental plant,0.5,annual,100
+Austria,Foliar Spray,200,apple,0.4,annual,80
+Austria,Foliar Spray,200,apple,0.6,biennial,120
+Austria,Foliar Spray,200,grape,0.24,annual,48
+Austria,Foliar Spray,200,grape,0.5,biennial,100
+Austria,Foliar Spray,200,ornamental plant,0.5,4/year,100
+Austria,Foliar Spray,200,pear,0.9,biennial,180
+Belgium,Foliar Spray,200,apple,0.35,annual,70
+Belgium,Foliar Spray,200,pear,0.35,annual,70
+Belgium,Foliar Spray,200,grape,0.28,annual,56
+Belgium,Foliar Spray,200,kiwi,0.28,annual,56
+Belgium,Foliar Spray,200,ornamental herbacious perennial,0.5,4/year,100
+Spain,Foliar Spray,200,aubergine,0.56,annual,112
+Spain,Foliar Spray,200,courgette,0.56,annual,112
+Spain,Foliar Spray,200,cucumber,0.56,annual,112
+Spain,Foliar Spray,200,pepper,0.56,annual,112
+Spain,Foliar Spray,200,watermelon,0.56,annual,112
+Spain,Foliar Spray,200,tomato,0.56,annual,112
+Spain,Foliar Spray,200,tobacco,?,?,?
+Italy,Foliar Spray,200,apple,0.9,annual,180
+Italy,Foliar Spray,200,pear,0.9,annual,180
+Italy,Foliar Spray,200,grape,0.5,annual,100
+Italy,Foliar Spray,200,peas,0.375,annual,75
+Italy,Foliar Spray,200,cucumber,0.56,annual,112
+Italy,Foliar Spray,200,tomato,0.56,annual,112
+Italy,Foliar Spray,200,pepper,0.56,annual,112
+Italy,Foliar Spray,200,aubergine,0.56,annual,112
+Italy,Foliar Spray,200,courgette,0.56,annual,112
+Italy,Foliar Spray,200,watermelon,0.56,annual,112
+Italy,Foliar Spray,200,tobacco,0.5,annual,100
+Portugal,Foliar Spray,200,grape,0.3,annual,60
+Portugal,Foliar Spray,200,grape,0.5,annual,100
+Portugal,Foliar Spray,200,tomato,0.56,annual,112
+Portugal,Foliar Spray,200,aubergine,0.56,annual,112
+Portugal,Foliar Spray,200,pepper,0.56,annual,112
+Portugal,Foliar Spray,200,cucumber,0.56,annual,112
+Portugal,Foliar Spray,200,courgette,0.56,annual,112
+Portugal,Foliar Spray,200,watermelon,0.56,annual,112
+Portugal,Foliar Spray,200,peas,0.375,biennial,75
+Portugal,Foliar Spray,200,peas,0.375,annual,75
+Slovenia,Foliar Spray,200,grape,0.5,annual,100
+Slovenia,Foliar Spray,200,apple,0.4,annual,80
+Malta,Foliar Spray,200,apple,0.9,biennial,180
+Malta,Foliar Spray,200,pear,0.9,biennial,180
+Malta,Foliar Spray,200,grape,0.3,annual,60
+Malta,Foliar Spray,200,tomato,0.56,annual,112
+Malta,Foliar Spray,200,pepper,0.56,annual,112
+Malta,Foliar Spray,200,aubergine,0.56,annual,112
+Malta,Foliar Spray,200,cucumber,0.56,annual,112
+Malta,Foliar Spray,200,squash,0.56,annual,112
+Malta,Foliar Spray,200,watermelon,0.56,annual,112
+Netherlands,Foliar Spray,200,apple,0.9,biennial,180
+Netherlands,Foliar Spray,200,peas,0.375,annual,75
+Netherlands,Foliar Spray,200,floristry crops,0.5,annual,100
+Netherlands,Foliar Spray,200,grape,0.5,annual,100
+Netherlands,Foliar Spray,200,quince,0.9,biennial,180
+Netherlands,Foliar Spray,200,medlar,0.9,biennial,180
+Netherlands,Foliar Spray,200,pear,0.9,biennial,180
+Netherlands,Foliar Spray,200,roses,0.5,annual,100
+Netherlands,Foliar Spray,200,perennial cultivation,0.5,4/year,100
+Netherlands,Foliar Spray,200,fruit trees,0.5,annual,100
+Netherlands,Foliar Spray,200,shrubs,0.5,annual,100
+Slovakia,Foliar Spray,200,vine,0.5,annual,100
+Slovakia,Foliar Spray,200,pear,0.3,annual,60
+Slovakia,Foliar Spray,200,apple,0.3,annual,60
+Slovakia,Foliar Spray,200,apple,0.2,annual,40

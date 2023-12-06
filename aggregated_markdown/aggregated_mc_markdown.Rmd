@@ -2678,12 +2678,12 @@ Exposure regime table
 ```{r}
 exp_reg_tab <- read.csv("input/exposure_regime.csv")
 
-colnames(exp_reg_tab) [2:7] <- c("[t0]", "[t24]", "[t48]", "[t96]", "[t144]", "[t192]")
+colnames(exp_reg_tab) <- c("", "[t0]", "[t24]", "[t48]", "[t96]", "[t144]", "[t192]")
 
 options(knitr.kable.NA = '_')
 
 exp_reg_tab <- kbl(exp_reg_tab, digits = 3) %>%
-                                      kable_styling() %>%
+                                      kable_styling(font_size = 20) %>%
                                       add_header_above(header = c("FPF concentrations (ppb) in nectar and pollen across the exposure period" = 7))
 
 exp_reg_tab
@@ -2746,6 +2746,22 @@ deg_datasets_tab <- kbl(deg_datasets, digits = 3) %>%
 deg_datasets_tab
 
 save_kable(deg_datasets_tab, "output/deg_datasets.pdf")
+```
 
+Table for assumed error
 
+```{r}
+ass_err <- read.csv("input/error_table.csv", row.names = 1)
+
+colnames(ass_err) <- c("SFO (% error)", "FOMC (% error)", "DFOP (% error)")
+
+options(knitr.kable.NA = '_')
+
+ass_err_tab <- kbl(ass_err, digits = 3) %>%
+                                      kable_styling() %>%
+                                      add_header_above(header = c("Fitted error for Chi-squared test" = 4))
+
+ass_err_tab
+
+save_kable(ass_err_tab, "output/assumed_error.pdf")
 ```

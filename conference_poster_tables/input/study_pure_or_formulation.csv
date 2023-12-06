@@ -1,1 +1,3 @@
-/Users/guymercer/db/microcolony_main/eu_databases_search_csvs/study_pure_or_formulation.csv
+﻿Insecticide,Search Term,Search Type,Database,Studies Using Formulation (All),Studies Using Formulation (Artificial Exposure)
+Flupyradifurone,"(((flupyradifurone OR butenolide*) AND (bees OR pollinator* OR bee OR ""bumble bee*"" OR ""honey bee*"" OR solitary OR honeybee* OR bumblebee* OR B.terrestris OR Bombus OR terrestris OR A.mellifera OR Apis OR mellifera )))",Topic,Web of Science Core Collection,4/18 (22.2%),3/17 (17.7%)
+Sulfoxaflor,"(((sulfoxaflor OR sulfoximine*) AND (bees OR pollinator* OR bee OR ""bumble bee*"" OR ""honey bee*"" OR solitary OR honeybee* OR bumblebee* OR B.terrestris OR Bombus OR terrestris OR A.mellifera OR Apis OR mellifera )))",Topic,Web of Science Core Collection,6/15 (40%),4/13 (28.6%)
