@@ -2753,7 +2753,7 @@ Table for assumed error
 ```{r}
 ass_err <- read.csv("input/error_table.csv", row.names = 1)
 
-colnames(ass_err) <- c("SFO (% error)", "FOMC (% error)", "DFOP (% error)")
+colnames(ass_err) <- c("SFO (% error)", "DFOP (% error)", "FOMC (% error)")
 
 options(knitr.kable.NA = '_')
 
